@@ -1,0 +1,28 @@
+{
+    "arch": "x86",
+    "crt-objects-fallback": "false",
+    "data-layout": "e-m:e-p:32:32-p270:32:32-p271:32:32-p272:64:64-i128:128-f64:32:64-f80:32-n8:16:32-S128",
+    "disable-redzone": true,
+    "features": "-mmx,-sse,+soft-float",
+    "linker": "ld",
+    "linker-flavor": "gnu",
+    "llvm-target": "i386-unknown-none",
+    "metadata": {
+        "description": null,
+        "host_tools": null,
+        "std": null,
+        "tier": null
+    },
+    "panic-strategy": "abort",
+    "pre-link-args": {
+        "gnu": [
+            "-Tld-scripts/x86.ld",
+            "-melf_i386"
+        ],
+        "gnu-lld": [
+            "-Tld-scripts/x86.ld",
+            "-melf_i386"
+        ]
+    },
+    "target-pointer-width": "32"
+}
