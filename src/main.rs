@@ -7,19 +7,19 @@ use core::arch::asm; // `asm` 매크로 가져오기
 
 /// Multiboot 헤더를 설정합니다.
 #[repr(C)]
-pub struct MultibootHeader {
+pub struct Multiboot {
     magic: u32,
     flags: u32,
     checksum: u32,
     header_addr: u32,
 }
 
-#[link_section = ".multiboot_header"]
+#[link_section = ".multiboot"]
 #[no_mangle]
-pub static MULTIBOOT_HEADER: MultibootHeader = MultibootHeader {
-    magic: 0x1BADB002,             // Magic number
+pub static MULTIBOOT: Multiboot = Multiboot {
+    magic: 0xE85250D6,             // Magic number
     flags: 0x0,                    // Flags
-    checksum: (0x1BADB002u32.wrapping_neg()), // Checksum (Magic + Flags + Checksum = 0이어야 함)
+    checksum: (0xE85250D6u32.wrapping_neg()), // Checksum (Magic + Flags + Checksum = 0이어야 함)
     header_addr: 0,                // 추가 데이터 (필요에 따라 사용)
 };
 
