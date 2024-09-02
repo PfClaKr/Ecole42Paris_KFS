@@ -28,7 +28,7 @@ run:
 
 clean:
 	cargo clean
-	rm -f *.o $(KERNEL) $(ISO)
+	rm -f *.o $(KERNEL) $(ISO) kfs
 	rm -rf iso
 
 re: clean all
