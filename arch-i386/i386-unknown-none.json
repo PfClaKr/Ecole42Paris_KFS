@@ -16,11 +16,11 @@
     "panic-strategy": "abort",
     "pre-link-args": {
         "gnu": [
-            "-Tld-scripts/x86.ld",
+            "-Tscripts/ld/x86.ld",
             "-melf_i386"
         ],
         "gnu-lld": [
-            "-Tld-scripts/x86.ld",
+            "-Tscripts/ld/x86.ld",
             "-melf_i386"
         ]
     },
