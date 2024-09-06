@@ -3,3 +3,4 @@
 /iso
 kfs.iso
 .vscode
+*.lock

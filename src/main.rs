@@ -3,9 +3,9 @@
 #![feature(naked_functions)]
 
 mod include;
-mod keyboard;
-mod shell;
-mod vga_buffer;
+mod io;
+
+use io::shell;
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {

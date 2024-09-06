@@ -128,7 +128,7 @@ impl fmt::Write for Writer {
 // macros to access from other modules with print!/println!
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::io::vga_buffer::_print(format_args!($($arg)*)));
 }
 
 #[macro_export]

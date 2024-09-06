@@ -1,4 +1,4 @@
-use crate::keyboard;
+use crate::io::keyboard;
 
 fn print_to_terminal(c: char) {
 	let vga_buffer = 0xb8000 as *mut u8;

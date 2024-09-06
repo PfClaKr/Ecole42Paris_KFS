@@ -1,4 +1,5 @@
 use crate::kernel_main;
+use crate::println;
 use core::arch::asm;
 use core::panic::PanicInfo;
 
@@ -34,5 +35,6 @@ pub extern "C" fn start() -> ! {
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
+	println!("{}", _info);
 	loop {}
 }
