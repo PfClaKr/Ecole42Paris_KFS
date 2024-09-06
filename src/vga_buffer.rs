@@ -47,15 +47,15 @@ struct Buffer {
 	chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
-use spin::Mutex;
 use lazy_static::lazy_static;
+use spin::Mutex;
 
 lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        column_position: 0,
-        color_code: ColorCode::new(Color::White, Color::Black),
-        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-    });
+	pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
+		column_position: 0,
+		color_code: ColorCode::new(Color::White, Color::Black),
+		buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+	});
 }
 
 pub struct Writer {
@@ -139,7 +139,6 @@ macro_rules! println {
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
-    use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
+	use core::fmt::Write;
+	WRITER.lock().write_fmt(args).unwrap();
 }
-
