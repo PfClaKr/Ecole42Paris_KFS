@@ -11,7 +11,6 @@ const SHIFT_RIGHT_RELEASE: u8 = 0x36 + 0x80;
 
 static SHIFT_PRESSED: Mutex<bool> = Mutex::new(false);
 
-
 pub fn init() {
 	unsafe {
 		asm_utile::outb(KEYBOARD_STATUS_PORT, 0xAE);
