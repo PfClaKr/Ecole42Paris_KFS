@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [x86_64-unknown-none, i386-unknown-none] # 테스트할 타겟을 매트릭스로 설정
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          override: true
+          components: rust-src
+          target: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: sudo apt-get install -y qemu-system-x86
+
+      - name: Build the project
+        run: cargo build -Zbuild-std=core,alloc --release --target ${{ matrix.target }}
+
+      - name: Run tests
+        run: |
+          if [ "${{ matrix.target }}" == "x86_64-unknown-none" ]; then
+            qemu-system-x86_64 -cdrom target/${{ matrix.target }}/release/KFS.iso;
+          elif [ "${{ matrix.target }}" == "i386-unknown-none" ]; then
+            qemu-system-i386 -cdrom target/${{ matrix.target }}/release/KFS.iso;
+          fi
+
+  fmt-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          override: true
+
+      - name: Run rustfmt check
+        run: cargo fmt --all -- --check
+
+  clippy-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          override: true
+
+      - name: Run clippy check
+        run: cargo clippy -- -D warnings
