@@ -5,9 +5,11 @@ authors = ["Ychun, Schaehun"]
 edition = "2021"
 
 [dependencies]
+spin = "0.9.8"
 
 [profile.dev]
 panic = "abort"
 
 [profile.release]
 panic = "abort"
+debug = true
