@@ -37,7 +37,7 @@ impl Shell {
 					}
 					'\x7f' => {
 						if *len > 0 {
-							input[*len] = '\0' as u8;
+							input[*len] = b'\0';
 							*len -= 1;
 							print!("\x7f");
 						}

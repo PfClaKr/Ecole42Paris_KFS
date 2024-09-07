@@ -1,6 +1,6 @@
 use crate::include::asm_utile;
-use spin::Mutex;
 use crate::io::vga_buffer;
+use spin::Mutex;
 
 const KEYBOARD_STATUS_PORT: u16 = 0x64;
 const KEYBOARD_DATA_PORT: u16 = 0x60;
