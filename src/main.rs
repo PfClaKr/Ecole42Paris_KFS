@@ -22,6 +22,5 @@ fn welcome_message() {
 #[no_mangle]
 pub extern "C" fn kernel_main() {
 	welcome_message();
-	let mut shell = Shell::new();
-	shell.run();
+	Shell::new().run();
 }
