@@ -143,7 +143,7 @@ impl Writer {
 				0x20..=0x7e | b'\n' => {
 					self.write_byte(byte);
 				}
-        0x7f => self.write_byte(0x7f),
+				0x7f => self.write_byte(0x7f),
 				_ => {
 					self.write_byte(0xfe);
 				}
@@ -253,24 +253,6 @@ impl fmt::Write for Writer {
 		self.write_string(s);
 		Ok(())
 	}
-}
-
-// macros to access from other modules with print!/println!
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::io::vga_buffer::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
-	use core::fmt::Write;
-	WRITER.lock().write_fmt(args).unwrap();
 }
 
 static mut VGA1_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
