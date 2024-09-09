@@ -81,6 +81,7 @@ impl Writer {
 					color_code,
 				});
 				self.column_position += 1;
+				set_cursor(self.column_position);
 			}
 		}
 	}
@@ -103,6 +104,7 @@ impl Writer {
 		}
 		self.clear_row(BUFFER_HEIGHT - 1);
 		self.column_position = 0;
+		set_cursor(self.column_position);
 	}
 
 	fn clear_row(&mut self, row: usize) {
@@ -141,4 +143,17 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
 	use core::fmt::Write;
 	WRITER.lock().write_fmt(args).unwrap();
+}
+
+use crate::include::asm_utile;
+
+pub fn set_cursor(x: usize) {
+	let position = (BUFFER_HEIGHT - 1) * BUFFER_WIDTH + x;
+	unsafe {
+		asm_utile::outb(0x3D4, 14);
+		asm_utile::outb(0x3D5, (position >> 8) as u8);
+
+		asm_utile::outb(0x3D4, 15);
+		asm_utile::outb(0x3D5, (position & 0xFF) as u8);
+	}
 }
