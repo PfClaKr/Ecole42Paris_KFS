@@ -108,15 +108,6 @@ impl Writer {
 					});
 				}
 			}
-			0x7f => {
-				if self.column_position > 0 {
-					self.column_position -= 1;
-					self.buffer.chars[BUFFER_HEIGHT - 1][self.column_position].write(ScreenChar {
-						ascii_character: b' ',
-						color_code: self.color_code,
-					});
-				}
-			}
 			byte => {
 				if self.column_position >= BUFFER_WIDTH {
 					self.new_line();
