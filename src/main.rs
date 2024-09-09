@@ -8,14 +8,14 @@ mod io;
 use io::shell::Shell;
 
 fn welcome_message() {
-	println!("   ___  _____     ");
-	println!("  /   |/ __  \\   ");
-	println!(" / /| |`' / /' ");
-	println!("/ /_| |  / /   ");
-	println!("\\___  |./ /___ ");
-	println!("    |_/\\_____/    ");
+	println!("\x1b[5;m   ___  _____     ");
+	println!("\x1b[9;m  /   |/ __  \\   ");
+	println!("\x1b[14;m / /| |`' / /' ");
+	println!("\x1b[3;m/ /_| |  / /   ");
+	println!("\x1b[13;m\\___  |./ /___ ");
+	println!("\x1b[10;m    |_/\\_____/    ");
 
-	println!("Knife Fork Spoon");
+	println!("\x1b[15;mKnife Fork Spoon");
 	println!("KFS 42 - ychun, schaehun");
 }
 

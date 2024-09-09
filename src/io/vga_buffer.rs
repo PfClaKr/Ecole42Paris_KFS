@@ -101,6 +101,7 @@ impl Writer {
 			0x7f => {
 				if self.column_position > 0 {
 					self.column_position -= 1;
+					set_cursor(self.column_position);
 					self.buffer.chars[BUFFER_HEIGHT - 1][self.column_position].write(ScreenChar {
 						ascii_character: b' ',
 						color_code: self.color_code,
@@ -120,6 +121,7 @@ impl Writer {
 					color_code,
 				});
 				self.column_position += 1;
+				set_cursor(self.column_position);
 			}
 		}
 	}
@@ -161,6 +163,7 @@ impl Writer {
 		}
 		self.clear_row(BUFFER_HEIGHT - 1);
 		self.column_position = 0;
+		set_cursor(self.column_position);
 	}
 
 	fn clear_row(&mut self, row: usize) {
@@ -313,5 +316,17 @@ fn load_vga(buffer_ptr: *const [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
 				write_char_at((*buffer_ptr)[y][x], x, y, 15);
 			}
 		}
+	}
+}
+
+use crate::include::asm_utile;
+
+fn set_cursor(x: usize) {
+	let position = (BUFFER_HEIGHT - 1) * BUFFER_WIDTH + x;
+	unsafe {
+		asm_utile::outb(0x3D4, 14);
+		asm_utile::outb(0x3D5, (position >> 8) as u8);
+		asm_utile::outb(0x3D4, 15);
+		asm_utile::outb(0x3D5, (position & 0xFF) as u8);
 	}
 }
