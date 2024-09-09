@@ -166,48 +166,35 @@ impl Writer {
 	#[inline(never)] // debug
 	fn syntax_check(&mut self, s: &str) -> bool {
 		use crate::include::string;
-		if s.contains('\x1b') && s.contains('m') {
-			if let Some(substr) = string::substring_between(s, '\x1b', 'm') {
-				if substr.contains(' ') {
-					return false;
-				}
-				// what to do with this if/else forest?
-				let mut ss_chars = substr.chars();
-				if let Some(delim) = ss_chars.next() {
-					if delim == '[' {
-						if let Some(color_code) = ss_chars.next() {
-							if color_code.is_ascii_digit() {
-								if let Some(tbd) = ss_chars.next() {
-									if tbd.is_ascii_digit() {
-										if let Some(last) = ss_chars.next() {
-											if last == ';' {
-												let _end = ss_chars.next();
-												match _end {
-													Some(_end) => {
-														return false;
-													}
-													None => {
-														return true;
-													}
-												}
-											}
-										}
-									} else if tbd == ';' {
-										let _end = ss_chars.next();
-										match _end {
-											Some(_end) => {
-												return false;
-											}
-											None => {
-												return true;
-											}
-										}
-									}
-								}
-							}
-						}
+		if !s.contains('\x1b') || !s.contains('m') {
+			return false;
+		}
+		if let Some(substr) = string::substring_between(s, '\x1b', 'm') {
+			if substr.contains(' ') {
+				return false;
+			}
+			let mut ss_chars = substr.chars();
+
+			if ss_chars.next() != Some('[') {
+				return false;
+			}
+
+			let color_code = ss_chars.next();
+			if color_code.is_none() || !color_code.unwrap().is_ascii_digit() {
+				return false;
+			}
+
+			let tbd = ss_chars.next();
+			match tbd {
+				Some(c) if c.is_ascii_digit() => {
+					if ss_chars.next() == Some(';') {
+						return ss_chars.next().is_none();
 					}
 				}
+				Some(';') => {
+					return ss_chars.next().is_none();
+				}
+				_ => return false,
 			}
 		}
 		false
