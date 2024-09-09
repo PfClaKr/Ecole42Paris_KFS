@@ -20,12 +20,3 @@ pub fn atoi(s: &str) -> Result<usize, &'static str> {
 	}
 	Ok(result)
 }
-
-pub fn append(s: &str, buffer: *mut [u8; 14000], len: usize) {
-    let s_bytes = s.as_bytes();
-    
-    if s_bytes.len() > buffer.len() {
-        return ;
-    }
-    buffer[len..s_bytes.len()].copy_from_slice(s_bytes);
-}
