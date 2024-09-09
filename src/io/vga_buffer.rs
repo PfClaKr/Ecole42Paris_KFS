@@ -59,7 +59,7 @@ lazy_static! {
 }
 
 pub struct Writer {
-	column_position: usize,
+	pub column_position: usize,
 	color_code: ColorCode,
 	buffer: &'static mut Buffer,
 }
@@ -68,6 +68,15 @@ impl Writer {
 	pub fn write_byte(&mut self, byte: u8) {
 		match byte {
 			b'\n' => self.new_line(),
+			0x7f => {
+                if self.column_position > 0 {
+                    self.column_position -= 1;
+                    self.buffer.chars[BUFFER_HEIGHT - 1][self.column_position].write(ScreenChar {
+                        ascii_character: b' ',
+                        color_code: self.color_code,
+                    });
+                }
+            }
 			byte => {
 				if self.column_position >= BUFFER_WIDTH {
 					self.new_line();
@@ -89,6 +98,7 @@ impl Writer {
 		for byte in s.bytes() {
 			match byte {
 				0x20..=0x7e | b'\n' => self.write_byte(byte),
+				0x7f => self.write_byte(0x7f),
 				_ => self.write_byte(0xfe),
 			}
 		}

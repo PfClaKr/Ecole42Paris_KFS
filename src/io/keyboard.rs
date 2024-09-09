@@ -58,10 +58,11 @@ pub fn read() -> Option<char> {
 		0x3B | 0x3C => {
 			if scancode == 0x3B {
 				vga_buffer::switch(1);
+				return Some('\x01');
 			} else {
 				vga_buffer::switch(2);
+				return Some('\x02');
 			}
-			return None;
 		}
 		_ => {
 			if scancode & 0x80 == 0 {
