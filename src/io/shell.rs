@@ -79,11 +79,11 @@ impl Shell {
 			if self.current_shell == 1 {
 				self.last_input1[..*len].copy_from_slice(&input[..*len]);
 				self.last_len1 = *len;
-				WRITER.lock().column_position -= *len + 3;
+				WRITER.lock().column_position -= *len + self.prompt.len();
 			} else {
 				self.last_input2[..*len].copy_from_slice(&input[..*len]);
 				self.last_len2 = *len;
-				WRITER.lock().column_position -= *len + 3;
+				WRITER.lock().column_position -= *len + self.prompt.len();
 			}
 
 			if new_shell == 1 {
