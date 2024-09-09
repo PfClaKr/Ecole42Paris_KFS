@@ -53,7 +53,7 @@ impl Shell {
 						if *len > 0 {
 							*len -= 1;
 							input[*len] = b'\0';
-							print!("{}", '\x7f' as char);
+							print!("{}", '\x7f');
 						}
 					}
 					'\x01' => {
@@ -97,8 +97,8 @@ impl Shell {
 			self.current_shell = new_shell;
 
 			self.display_prompt();
-			for i in 0..*len {
-				print!("{}", input[i] as char);
+			for item in input.iter().take(*len) {
+				print!("{}", *item as char);
 			}
 		}
 	}
