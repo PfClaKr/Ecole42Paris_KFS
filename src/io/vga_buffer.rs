@@ -22,6 +22,34 @@ pub enum Color {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
+struct ColorMap(u8);
+
+impl ColorMap {
+	pub fn from_str(color: usize) -> Option<Color> {
+		match color {
+			0 => Some(Color::Black),
+			1 => Some(Color::Blue),
+			2 => Some(Color::Green),
+			3 => Some(Color::Cyan),
+			4 => Some(Color::Red),
+			5 => Some(Color::Magenta),
+			6 => Some(Color::Brown),
+			7 => Some(Color::LightGray),
+			8 => Some(Color::DarkGray),
+			9 => Some(Color::LightBlue),
+			10 => Some(Color::LightGreen),
+			11 => Some(Color::LightCyan),
+			12 => Some(Color::LightRed),
+			13 => Some(Color::Pink),
+			14 => Some(Color::Yellow),
+			15 => Some(Color::White),
+			_ => None,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
 struct ColorCode(u8);
 
 impl ColorCode {
@@ -55,6 +83,7 @@ lazy_static! {
 		column_position: 0,
 		color_code: ColorCode::new(Color::White, Color::Black),
 		buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+		skip: 0,
 	});
 }
 
@@ -62,6 +91,7 @@ pub struct Writer {
 	column_position: usize,
 	color_code: ColorCode,
 	buffer: &'static mut Buffer,
+	skip: usize,
 }
 
 impl Writer {
@@ -85,12 +115,30 @@ impl Writer {
 		}
 	}
 
+	#[inline(never)] // debug
 	pub fn write_string(&mut self, s: &str) {
+		let mut index;
+		index = 0;
 		for byte in s.bytes() {
-			match byte {
-				0x20..=0x7e | b'\n' => self.write_byte(byte),
-				_ => self.write_byte(0xfe),
+			if self.skip > 0 {
+				self.skip -= 1;
+				index += 1;
+				continue;
 			}
+			match byte {
+				b'\x1b' => {
+					if !self.sgr(&s[index..]) {
+						self.write_byte(0xfe);
+					}
+				}
+				0x20..=0x7e | b'\n' => {
+					self.write_byte(byte);
+				}
+				_ => {
+					self.write_byte(0xfe);
+				}
+			}
+			index += 1;
 		}
 	}
 
@@ -114,6 +162,91 @@ impl Writer {
 			self.buffer.chars[row][col].write(blank);
 		}
 	}
+
+	#[inline(never)] // debug
+	fn syntax_check(&mut self, s: &str) -> bool {
+		use crate::include::string;
+		if s.contains('\x1b') && s.contains('m') {
+			if let Some(substr) = string::substring_between(s, '\x1b', 'm') {
+				if substr.contains(' ') {
+					return false;
+				}
+				// what to do with this if/else forest?
+				let mut ss_chars = substr.chars();
+				if let Some(delim) = ss_chars.next() {
+					if delim == '[' {
+						if let Some(color_code) = ss_chars.next() {
+							if color_code.is_ascii_digit() {
+								if let Some(tbd) = ss_chars.next() {
+									if tbd.is_ascii_digit() {
+										if let Some(last) = ss_chars.next() {
+											if last == ';' {
+												let _end = ss_chars.next();
+												match _end {
+													Some(_end) => {
+														return false;
+													}
+													None => {
+														return true;
+													}
+												}
+											}
+										}
+									} else if tbd == ';' {
+										let _end = ss_chars.next();
+										match _end {
+											Some(_end) => {
+												return false;
+											}
+											None => {
+												return true;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		false
+	}
+
+	#[inline(never)] // debug
+	fn sgr(&mut self, s: &str) -> bool {
+		// Up Down Right Left : A B C D
+		// SGR : m
+		if !self.syntax_check(s) {
+			return false;
+		}
+		let slice;
+		if let Some(end) = s.find('m') {
+			slice = &s[1..end]; // from ESC character (excluded) to 'm' (with 'm' excluded)
+		} else {
+			return false; // wrong syntax: missing m
+		};
+		if slice.len() < 3 {
+			// minimal count of sgr syntax: \x1b[0;m
+			return false;
+		}
+
+		use crate::include::string;
+		if slice.starts_with('[') && slice.ends_with(';') {
+			if let Some(substr) = string::substring_between(slice, '[', ';') {
+				if let Ok(color_code) = string::atoi(substr) {
+					if let Some(color) = ColorMap::from_str(color_code) {
+						self.color_code = ColorCode::new(color, Color::Black);
+					} else {
+						self.color_code = ColorCode::new(Color::White, Color::Black); // default color
+					}
+					self.skip = slice.len() + 1; // ESC and 'm'
+					return true;
+				}
+			}
+		}
+		false
+	}
 }
 
 use core::fmt;
@@ -123,22 +256,4 @@ impl fmt::Write for Writer {
 		self.write_string(s);
 		Ok(())
 	}
-}
-
-// macros to access from other modules with print!/println!
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::io::vga_buffer::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
-	use core::fmt::Write;
-	WRITER.lock().write_fmt(args).unwrap();
 }
