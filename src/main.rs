@@ -5,10 +5,23 @@
 mod include;
 mod io;
 
-use io::shell;
+use io::shell::Shell;
+
+fn welcome_message() {
+	println!("   ___  _____     ");
+	println!("  /   |/ __  \\   ");
+	println!(" / /| |`' / /' ");
+	println!("/ /_| |  / /   ");
+	println!("\\___  |./ /___ ");
+	println!("    |_/\\_____/    ");
+
+	println!("Knife Fork Spoon");
+	println!("KFS 42 - ychun, schaehun");
+}
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
-	println!("42");
-	shell::new();
+	welcome_message();
+	let mut shell = Shell::new();
+	shell.run();
 }

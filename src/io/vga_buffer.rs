@@ -59,7 +59,7 @@ lazy_static! {
 }
 
 pub struct Writer {
-	column_position: usize,
+	pub column_position: usize,
 	color_code: ColorCode,
 	buffer: &'static mut Buffer,
 }
@@ -68,6 +68,15 @@ impl Writer {
 	pub fn write_byte(&mut self, byte: u8) {
 		match byte {
 			b'\n' => self.new_line(),
+			0x7f => {
+				if self.column_position > 0 {
+					self.column_position -= 1;
+					self.buffer.chars[BUFFER_HEIGHT - 1][self.column_position].write(ScreenChar {
+						ascii_character: b' ',
+						color_code: self.color_code,
+					});
+				}
+			}
 			byte => {
 				if self.column_position >= BUFFER_WIDTH {
 					self.new_line();
@@ -90,6 +99,7 @@ impl Writer {
 		for byte in s.bytes() {
 			match byte {
 				0x20..=0x7e | b'\n' => self.write_byte(byte),
+				0x7f => self.write_byte(0x7f),
 				_ => self.write_byte(0xfe),
 			}
 		}
@@ -145,15 +155,63 @@ pub fn _print(args: fmt::Arguments) {
 	WRITER.lock().write_fmt(args).unwrap();
 }
 
-use crate::include::asm_utile;
+static mut VGA1_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
+static mut VGA2_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
+static mut CURRENT_VGA: u8 = 1;
 
-pub fn set_cursor(x: usize) {
-	let position = (BUFFER_HEIGHT - 1) * BUFFER_WIDTH + x;
+pub fn switch(new_vga: u8) {
 	unsafe {
-		asm_utile::outb(0x3D4, 14);
-		asm_utile::outb(0x3D5, (position >> 8) as u8);
+		if CURRENT_VGA != new_vga {
+			if CURRENT_VGA == 1 {
+				save_vga(&raw mut VGA1_BUFFER);
+			} else {
+				save_vga(&raw mut VGA2_BUFFER);
+			}
 
-		asm_utile::outb(0x3D4, 15);
-		asm_utile::outb(0x3D5, (position & 0xFF) as u8);
+			if new_vga == 1 {
+				load_vga(&raw const VGA1_BUFFER);
+			} else {
+				load_vga(&raw const VGA2_BUFFER);
+			}
+
+			CURRENT_VGA = new_vga;
+		}
+	}
+}
+
+fn read_char_at(x: usize, y: usize) -> u8 {
+	unsafe {
+		let vga_buffer = 0xb8000 as *const Buffer;
+		(*vga_buffer).chars[y][x].read().ascii_character
+	}
+}
+
+fn write_char_at(character: u8, x: usize, y: usize, color: u8) {
+	unsafe {
+		let vga_buffer = 0xb8000 as *mut Buffer;
+		(*vga_buffer).chars[y][x].write(ScreenChar {
+			ascii_character: character,
+			color_code: ColorCode(color),
+		});
+	}
+}
+
+fn save_vga(buffer_ptr: *mut [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
+	unsafe {
+		for y in 0..BUFFER_HEIGHT {
+			for x in 0..BUFFER_WIDTH {
+				(*buffer_ptr)[y][x] = read_char_at(x, y);
+			}
+		}
+	}
+}
+
+fn load_vga(buffer_ptr: *const [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
+	unsafe {
+		for y in 0..BUFFER_HEIGHT {
+			for x in 0..BUFFER_WIDTH {
+				write_char_at((*buffer_ptr)[y][x], x, y, 15);
+			}
+		}
 	}
 }
