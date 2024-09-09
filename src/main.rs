@@ -16,7 +16,7 @@ fn welcome_message() {
 	println!("\x1b[10;m    |_/\\_____/    ");
 
 	println!("\x1b[15;mKnife Fork Spoon");
-	println!("KFS 42 - ychun, schaehun");
+	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
 }
 
 #[no_mangle]

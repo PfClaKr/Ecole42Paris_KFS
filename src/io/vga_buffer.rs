@@ -258,8 +258,16 @@ impl fmt::Write for Writer {
 	}
 }
 
-static mut VGA1_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
-static mut VGA2_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
+static mut VGA1_BUFFER: [ScreenChar; BUFFER_WIDTH * BUFFER_HEIGHT] = [ScreenChar {
+	ascii_character: b' ',
+	color_code: ColorCode(0),
+};
+	BUFFER_WIDTH * BUFFER_HEIGHT];
+static mut VGA2_BUFFER: [ScreenChar; BUFFER_WIDTH * BUFFER_HEIGHT] = [ScreenChar {
+	ascii_character: b' ',
+	color_code: ColorCode(0),
+};
+	BUFFER_WIDTH * BUFFER_HEIGHT];
 static mut CURRENT_VGA: u8 = 1;
 
 pub fn switch(new_vga: u8) {
@@ -282,40 +290,39 @@ pub fn switch(new_vga: u8) {
 	}
 }
 
-fn read_char_at(x: usize, y: usize) -> u8 {
+fn save_vga(buffer: *mut [ScreenChar; BUFFER_WIDTH * BUFFER_HEIGHT]) {
+	unsafe {
+		for y in 0..BUFFER_HEIGHT {
+			for x in 0..BUFFER_WIDTH {
+				let index = y * BUFFER_WIDTH + x;
+				(*buffer)[index] = read_screen_char_at(x, y);
+			}
+		}
+	}
+}
+
+fn load_vga(buffer: *const [ScreenChar; BUFFER_WIDTH * BUFFER_HEIGHT]) {
+	unsafe {
+		for y in 0..BUFFER_HEIGHT {
+			for x in 0..BUFFER_WIDTH {
+				let index = y * BUFFER_WIDTH + x;
+				write_screen_char_at((*buffer)[index], x, y);
+			}
+		}
+	}
+}
+
+fn read_screen_char_at(x: usize, y: usize) -> ScreenChar {
 	unsafe {
 		let vga_buffer = 0xb8000 as *const Buffer;
-		(*vga_buffer).chars[y][x].read().ascii_character
+		(*vga_buffer).chars[y][x].read()
 	}
 }
 
-fn write_char_at(character: u8, x: usize, y: usize, color: u8) {
+fn write_screen_char_at(screen_char: ScreenChar, x: usize, y: usize) {
 	unsafe {
 		let vga_buffer = 0xb8000 as *mut Buffer;
-		(*vga_buffer).chars[y][x].write(ScreenChar {
-			ascii_character: character,
-			color_code: ColorCode(color),
-		});
-	}
-}
-
-fn save_vga(buffer_ptr: *mut [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
-	unsafe {
-		for y in 0..BUFFER_HEIGHT {
-			for x in 0..BUFFER_WIDTH {
-				(*buffer_ptr)[y][x] = read_char_at(x, y);
-			}
-		}
-	}
-}
-
-fn load_vga(buffer_ptr: *const [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
-	unsafe {
-		for y in 0..BUFFER_HEIGHT {
-			for x in 0..BUFFER_WIDTH {
-				write_char_at((*buffer_ptr)[y][x], x, y, 15);
-			}
-		}
+		(*vga_buffer).chars[y][x].write(screen_char);
 	}
 }
 
