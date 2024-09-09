@@ -250,74 +250,82 @@ impl Writer {
 }
 
 use core::fmt;
+use crate::print;
 
 impl fmt::Write for Writer {
 	fn write_str(&mut self, s: &str) -> fmt::Result {
+		use crate::include::string;
+		match CURRENT_VGA {
+			1 => {
+				string::append(s, &raw mut VGA1_BUFFER, VGA1_BUFFER.len());
+			}
+			2 => {
+				string::append(s, &raw mut VGA2_BUFFER, VGA2_BUFFER.len());
+			}
+			_ => {}
+		}
 		self.write_string(s);
 		Ok(())
 	}
 }
 
-static mut VGA1_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
-static mut VGA2_BUFFER: [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT] = [[0; BUFFER_WIDTH]; BUFFER_HEIGHT];
+use core::str;
+
+static mut VGA1_BUFFER: [u8; 14000] = [0; 14000];
+static mut VGA2_BUFFER: [u8; 14000] = [0; 14000];
 static mut CURRENT_VGA: u8 = 1;
 
 pub fn switch(new_vga: u8) {
 	unsafe {
 		if CURRENT_VGA != new_vga {
-			if CURRENT_VGA == 1 {
-				save_vga(&raw mut VGA1_BUFFER);
-			} else {
-				save_vga(&raw mut VGA2_BUFFER);
-			}
-
 			if new_vga == 1 {
-				load_vga(&raw const VGA1_BUFFER);
+				// load_vga(&raw const VGA1_BUFFER);
+				print!("{}", str::from_utf8(&raw const VGA1_BUFFER).ok());
 			} else {
-				load_vga(&raw const VGA2_BUFFER);
+				// load_vga(&raw const VGA2_BUFFER);
+				print!("{}", str::from_utf8(&raw const VGA2_BUFFER).ok());
 			}
-
 			CURRENT_VGA = new_vga;
 		}
 	}
 }
 
-fn read_char_at(x: usize, y: usize) -> u8 {
-	unsafe {
-		let vga_buffer = 0xb8000 as *const Buffer;
-		(*vga_buffer).chars[y][x].read().ascii_character
-	}
-}
+// fn read_char_at(x: usize, y: usize) -> u8 {
+// 	unsafe {
+// 		let vga_buffer = 0xb8000 as *const Buffer;
+// 		(*vga_buffer).chars[y][x].read().ascii_character
+// 	}
+// }
 
-fn write_char_at(character: u8, x: usize, y: usize, color: u8) {
-	unsafe {
-		let vga_buffer = 0xb8000 as *mut Buffer;
-		(*vga_buffer).chars[y][x].write(ScreenChar {
-			ascii_character: character,
-			color_code: ColorCode(color),
-		});
-	}
-}
+// fn write_char_at(character: u8, x: usize, y: usize, color: u8) {
+// 	unsafe {
+// 		let vga_buffer = 0xb8000 as *mut Buffer;
+// 		(*vga_buffer).chars[y][x].write(ScreenChar {
+// 			ascii_character: character,
+// 			color_code: ColorCode(color),
+// 		});
+// 	}
+// }
 
-fn save_vga(buffer_ptr: *mut [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
-	unsafe {
-		for y in 0..BUFFER_HEIGHT {
-			for x in 0..BUFFER_WIDTH {
-				(*buffer_ptr)[y][x] = read_char_at(x, y);
-			}
-		}
-	}
-}
+// fn save_vga(buffer_ptr: *mut [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
+// 	unsafe {
+// 		for y in 0..BUFFER_HEIGHT {
+// 			for x in 0..BUFFER_WIDTH {
+// 				(*buffer_ptr)[y][x] = read_char_at(x, y);
+// 			}
+// 		}
+// 	}
+// }
 
-fn load_vga(buffer_ptr: *const [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
-	unsafe {
-		for y in 0..BUFFER_HEIGHT {
-			for x in 0..BUFFER_WIDTH {
-				write_char_at((*buffer_ptr)[y][x], x, y, 15);
-			}
-		}
-	}
-}
+// fn load_vga(buffer_ptr: *const [[u8; BUFFER_WIDTH]; BUFFER_HEIGHT]) {
+// 	unsafe {
+// 		for y in 0..BUFFER_HEIGHT {
+// 			for x in 0..BUFFER_WIDTH {
+// 				write_char_at((*buffer_ptr)[y][x], x, y, 15);
+// 			}
+// 		}
+// 	}
+// }
 
 use crate::include::asm_utile;
 
