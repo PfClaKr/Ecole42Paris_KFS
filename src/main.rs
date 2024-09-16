@@ -21,6 +21,9 @@ fn welcome_message() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
+	unsafe {
+		include::gdt::load();
+	}
 	welcome_message();
 	Shell::new().run();
 }
