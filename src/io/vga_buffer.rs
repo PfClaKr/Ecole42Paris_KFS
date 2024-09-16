@@ -166,7 +166,7 @@ impl Writer {
 		set_cursor(self.column_position);
 	}
 
-	fn clear_row(&mut self, row: usize) {
+	pub fn clear_row(&mut self, row: usize) {
 		let blank = ScreenChar {
 			ascii_character: b' ',
 			color_code: self.color_code,

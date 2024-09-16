@@ -1,6 +1,6 @@
 use crate::io::keyboard;
 use crate::io::vga_buffer::WRITER;
-use crate::print;
+use crate::{print, println};
 
 const INPUT_SIZE: usize = 77;
 
@@ -32,8 +32,77 @@ impl Shell {
 		loop {
 			self.display_prompt();
 			self.read_input(&mut input, &mut len);
-			// self.execute_command(&input[..len]);
+			self.execute_command(&input[..len]);
 			len = 0;
+		}
+	}
+
+	fn execute_command(&self, input: &[u8]) {
+		use core::str;
+		match str::from_utf8(input) {
+			Ok("clear") => {
+				for _i in 0..25 {
+					WRITER.lock().clear_row(_i);
+				}
+			}
+			Ok("reboot") => self.reboot(),
+			Ok("stack") => self.print_kernel_stack(),
+			Ok("halt") => self.halt(),
+			Ok(command) => print!("Command not found: {}\n", command),
+			Err(_) => print!("Command not UTF-8 input\n"),
+		}
+	}
+
+	fn halt(&self) {
+		use core::arch::asm;
+
+		println!("System is halting...");
+		loop {
+			unsafe {
+				asm!("hlt");
+			}
+		}
+	}
+
+	fn reboot(&self) {
+		use core::arch::asm;
+		unsafe {
+			asm!(
+				"cli",
+				"2: in al, 0x64",
+				"test al, 0x02",
+				"jnz 2b",
+				"mov al, 0xFE",
+				"out 0x64, al",
+				"hlt",
+				options(noreturn)
+			);
+		}
+	}
+
+	fn print_kernel_stack(&self) {
+		use core::arch::asm;
+		let stack_pointer: i32;
+		let base_pointer: i32;
+
+		unsafe {
+			asm!(
+				"mov {0:e}, esp",
+				"mov {1:e}, ebp",
+				out(reg) stack_pointer,
+				out(reg) base_pointer
+			);
+		}
+
+		println!("Current Stack Pointer (ESP): {:#x}", stack_pointer);
+		println!("Current Base Pointer (EBP): {:#x}", base_pointer);
+
+		let stack_size = 64;
+		for i in 0..(stack_size / 4) {
+			unsafe {
+				let stack_value: u64 = *((stack_pointer as *const u64).offset(i as isize));
+				println!("Stack[{}]: {:#x}", i, stack_value);
+			}
 		}
 	}
 
