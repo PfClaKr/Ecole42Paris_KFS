@@ -46,7 +46,7 @@ impl Shell {
 				}
 			}
 			Ok("reboot") => self.reboot(),
-			Ok("print_stack") => self.print_kernel_stack(),
+			Ok("stack") => self.print_kernel_stack(),
 			Ok("halt") => self.halt(),
 			Ok(command) => print!("Command not found: {}\n", command),
 			Err(_) => print!("Command not UTF-8 input\n"),
@@ -68,13 +68,13 @@ impl Shell {
 		use core::arch::asm;
 		unsafe {
 			asm!(
-				"cli",            // 인터럽트 비활성화
-				"2: in al, 0x64", // 8042 상태 레지스터 읽기
-				"test al, 0x02",  // 입력 버퍼가 비었는지 확인
-				"jnz 2b",         // 입력 버퍼가 비어있지 않으면 대기
-				"mov al, 0xFE",   // 재부팅 명령(0xFE)을 AL 레지스터에 로드
-				"out 0x64, al",   // 명령을 0x64 포트에 전송 (8042 키보드 컨트롤러)
-				"hlt",            // CPU 멈춤 (재부팅이 실패할 경우를 대비한 대기)
+				"cli",
+				"2: in al, 0x64",
+				"test al, 0x02",
+				"jnz 2b",
+				"mov al, 0xFE",
+				"out 0x64, al",
+				"hlt",
 				options(noreturn)
 			);
 		}
@@ -86,21 +86,18 @@ impl Shell {
 		let base_pointer: i32;
 
 		unsafe {
-			// 인라인 어셈블리를 통해 스택 포인터(RSP)와 베이스 포인터(RBP) 읽기
 			asm!(
-				"mov {0:e}, esp",   // 현재 스택 포인터를 stack_pointer에 저장
-				"mov {1:e}, ebp",   // 현재 베이스 포인터를 base_pointer에 저장
+				"mov {0:e}, esp",
+				"mov {1:e}, ebp",
 				out(reg) stack_pointer,
 				out(reg) base_pointer
 			);
 		}
 
-		// 스택 포인터와 베이스 포인터 값을 출력
 		println!("Current Stack Pointer (ESP): {:#x}", stack_pointer);
 		println!("Current Base Pointer (EBP): {:#x}", base_pointer);
 
-		// 스택의 특정 범위를 출력하는 부분을 추가할 수 있음
-		let stack_size = 64; // 예시로 64바이트 크기
+		let stack_size = 64;
 		for i in 0..(stack_size / 4) {
 			unsafe {
 				let stack_value: u64 = *((stack_pointer as *const u64).offset(i as isize));
