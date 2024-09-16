@@ -15,7 +15,7 @@ impl GdtEntry {
 			base_middle: ((base >> 16) & 0xFF) as u8,
 			base_high: ((base >> 24) & 0xFF) as u8,
 			limit_low: (limit & 0xFFFF) as u16,
-			access: access,
+			access,
 			granularity: ((limit >> 16) & 0x0F) as u8 | (gran << 4),
 		}
 	}
@@ -64,7 +64,7 @@ pub unsafe fn load() {
 	ptr::write_volatile(GDT_PTR, gdt);
 
 	let gdtr = GdtDescriptor {
-		limit: 8 * 7 as u16 - 1,
+		limit: (core::mem::size_of::<Gdt>() - 1) as u16,
 		base: GDT_PTR as u32,
 	};
 
