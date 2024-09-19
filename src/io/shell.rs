@@ -1,3 +1,4 @@
+use crate::io::hexdump;
 use crate::io::keyboard;
 use crate::io::vga_buffer::WRITER;
 use crate::{print, println};
@@ -97,13 +98,15 @@ impl Shell {
 		println!("Current Stack Pointer (ESP): {:#x}", stack_pointer);
 		println!("Current Base Pointer (EBP): {:#x}", base_pointer);
 
-		let stack_size = 64;
-		for i in 0..(stack_size / 4) {
-			unsafe {
-				let stack_value: u64 = *((stack_pointer as *const u64).offset(i as isize));
-				println!("Stack[{}]: {:#x}", i, stack_value);
-			}
+		let stack_size = base_pointer - stack_pointer;
+		println!("Stack size: {} bytes", stack_size);
+
+		if stack_size > 8192 {
+			println!("Stack size too large, Limiting to 8KB.");
+			return;
 		}
+
+		hexdump::print(stack_pointer as *const u8, stack_size);
 	}
 
 	fn display_prompt(&self) {
