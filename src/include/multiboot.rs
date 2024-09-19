@@ -25,8 +25,8 @@ pub static MULTIBOOT: Multiboot = Multiboot {
 pub extern "C" fn start() -> ! {
 	unsafe {
 		asm!(
-			"cli",                 // 인터럽트 비활성화
-			"call {kernel_main}",  // Rust 커널의 진입점 호출
+			"cli",
+			"call {kernel_main}",
 			kernel_main = sym kernel_main,
 			options(noreturn)
 		);
