@@ -14,7 +14,7 @@ $(ISO): kfs
 	mkdir -p iso/boot/grub
 	cp target/$(TARGET)/release/KFS iso/boot/kfs.bin
 	cp scripts/grub/grub.cfg iso/boot/grub/
-	grub-mkrescue -o $(ISO) iso
+	grub-mkrescue -d arch-i386/grub-i386-pc -o $(ISO) iso
 
 kfs:
 	$(RUSTC) build -Zbuild-std=core,alloc --release --target=arch-i386/$(TARGET).json
