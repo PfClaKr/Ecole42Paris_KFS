@@ -4,3 +4,4 @@
 kfs.iso
 .vscode
 *.lock
+Cargo.lock

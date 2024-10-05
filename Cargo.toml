@@ -1,12 +1,12 @@
 [package]
 name = "KFS"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Ychun, Schaehun"]
 edition = "2021"
 
 [dependencies]
 spin = "0.9.8"
-volatile = "0.2.6"
+volatile = "0.2.1"
 
 [dependencies.lazy_static]
 version = "1.0"
