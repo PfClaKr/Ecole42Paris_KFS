@@ -50,8 +50,8 @@ impl Shell {
 			Ok("reboot") => self.reboot(),
 			Ok("stack") => self.print_kernel_stack(),
 			Ok("halt") => self.halt(),
-			Ok("all bitmap") => self.bitmap(true),
 			Ok("bitmap") => self.bitmap(false),
+			Ok("bitmap --all") => self.bitmap(true),
 			Ok("help") => self.help(),
 			Ok(command) => print!("Command not found: {}\n", command),
 			Err(_) => print!("Command not UTF-8 input\n"),
@@ -64,7 +64,7 @@ impl Shell {
 For print some information of kernel :
    stack        visualy see stack status with hex and char
    bitmap       visualy see allocated physical frame
-   all bitmap   visualy see all physical frame
+      bitmap --all   visualy see all physical frame
 
 Power management :
    halt         stop cpu before intrruepting (not implement)
@@ -76,21 +76,21 @@ User experience :
 		)
 	}
 
-	fn bitmap(&mut self, flag: bool) {
+	fn bitmap(&mut self, all_flag: bool) {
 		let mut line_count = 0;
 		let bitmap = BITMAP.lock().bitmap;
 
 		for (i, entry) in bitmap.iter().enumerate() {
-			// if *entry != 0 || flag {
-			// 	println!("Entry {} (0x{:08x}): {:032b}", i, entry, entry);
-			// 	line_count += 1;
-			// }
+			if all_flag {
+				println!("Entry {}: {:032b}", i, entry);
+				line_count += 1;
+			}
 
 			for j in 0..32 {
 				let bit_status = (entry >> (31 - j)) & 1;
 				let frame_index = i * 32 + j;
 				let frame_address = frame_index * 0x1000;
-				if bit_status == 1 || flag {
+				if bit_status == 1 || all_flag {
 					println!(
 						"Frame {} (0x{:08x}): {}",
 						frame_index,
@@ -101,11 +101,15 @@ User experience :
 				}
 
 				if line_count == 24 {
-					print!("Press Enter to continue ...");
+					print!("Press Enter to continue or press x to quit ...");
 					loop {
 						let input = keyboard::read();
 						match input {
 							Some('\n') => break,
+							Some('x') => {
+								println!("");
+								return;
+							}
 							_ => continue,
 						}
 					}

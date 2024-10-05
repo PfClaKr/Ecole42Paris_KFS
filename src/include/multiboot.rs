@@ -1,7 +1,6 @@
+use crate::include::panic::panic;
 use crate::kernel_main;
-use crate::println;
 use core::arch::asm;
-use core::panic::PanicInfo;
 
 #[repr(C)]
 struct MultibootHeader {
@@ -93,14 +92,4 @@ pub fn parse_multiboot_info(multiboot_info: usize, multiboot_tag: u32) -> Option
 	}
 
 	None
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-	println!(
-		"Panicked :\nlocation: {}\nreason: {}",
-		_info.location().unwrap(),
-		_info.message()
-	);
-	loop {}
 }
