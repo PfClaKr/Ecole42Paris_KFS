@@ -83,7 +83,7 @@ impl PhysicalMemory {
 
 	/// ## Alloc_frame_address
 	/// Change the bitmap status with physical address. \
-	/// No return but can Error.
+	/// No return but can panic.
 	pub fn alloc_frame_address(&mut self, address: usize) -> Result<(), PhysicalMemoryError> {
 		self.alloc_bitmap(address)
 	}
@@ -94,8 +94,8 @@ pub static BITMAP: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory {
 	next: 0,
 });
 
-/// ## init physical memory
-/// Take Multiboot memorymap and mark unuseable memory in bitmap.
+/// ## Init physical memory
+/// Take Multiboot memorymap and mark unuseable memory in bitmap. \
 /// Mark the space of already take by kernel. ex) gdt, vga, ps2, etc...
 pub fn init(memory_map: usize, multiboot_info: usize) {
 	unsafe {
