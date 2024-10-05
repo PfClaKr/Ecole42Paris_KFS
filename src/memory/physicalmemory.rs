@@ -8,7 +8,8 @@ use spin::Mutex;
 pub enum PhysicalMemoryError {
 	OutofMemory,
 	NoFrameAvailable,
-	AlreadyUse,
+	FrameAlreadyUse,
+	FrameNotInUse,
 }
 
 const N_FRAMES: usize = 1048576;
@@ -52,20 +53,22 @@ impl PhysicalMemory {
 				self.next = index;
 				Ok(())
 			}
-			false => Err(PhysicalMemoryError::AlreadyUse),
+			false => Err(PhysicalMemoryError::FrameAlreadyUse),
 		}
 	}
 
 	pub fn free_frame(&mut self, address: usize) -> Result<(), PhysicalMemoryError> {
-		assert_eq!(address % 0x1000, 0, "Address must be fit in 4kb");
+		let index = address / 0x1000 / 0x20;
+		let offset = address / 0x1000 % 0x20;
 
-		let frame = address / 0x1000;
-		let idx = frame / 32;
-		let bit = 1 << (frame % 32);
-		assert!(self.bitmap[idx] & bit != 0, "Frame is already empty");
-
-		self.bitmap[idx] &= !bit;
-		Ok(())
+		match self.bitmap[index] & (0x80000000 >> offset) != 0 {
+			true => {
+				self.bitmap[index] &= !(0x80000000 >> offset);
+				self.next = index;
+				Ok(())
+			}
+			false => Err(PhysicalMemoryError::FrameNotInUse),
+		}
 	}
 
 	/// ## Alloc_frame
