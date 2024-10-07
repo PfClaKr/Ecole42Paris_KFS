@@ -2,9 +2,12 @@ use core::arch::asm;
 use crate::println;
 
 use crate::memory::physicalmemory::BITMAP;
+use crate::include::symbols;
 
-const ENTRY_COUNT: usize = 1024;
-const PAGE_SIZE: usize = 4096; // 4KB
+
+const SYM_KERNEL_START: u32 = symbols::get_kernel_start();
+const SYM_KERNEL_END: u32 = symbols::get_kernel_end();
+const SYM_PAGE_START: u32 = symbols::get_first_page();
 
 // First 768 entries (0–767):
 // These correspond to the lower 3GB (768 * 4MB = 3GB) 
@@ -27,6 +30,9 @@ const KERNEL_SPACE_HIGH: u32 = 0xFFFFFFFF;
 
 type PageDirectoryEntry = u32;
 type PageTableEntry = u32;
+
+const ENTRY_COUNT: usize = 1024;
+const PAGE_SIZE: usize = 4096; // 4KB
 
 #[repr(C, align(4096))]
 pub struct PageDirectory {
@@ -141,9 +147,9 @@ pub fn init() {
 	
 	// map VGA buffer (at 0xB8000) usually the size of the VGA_BUFFER is 4KB
 	// but can be up to 8KB depending on the display mode
-	//
-	// let vga_index = VGA_BUFFER_ADDRESS / 0x1000;
-	// page_table.entry[vga_index] = VGA_BUFFER_ADDRESS as u32 | 0x1 | 0x01;
+	
+	let vga_index = VGA_BUFFER_ADDRESS / 0x1000;
+	page_table.entry[vga_index] = VGA_BUFFER_ADDRESS as u32 | 0x1 | 0x01;
 
 	unsafe {
 		load_page_directory(&page_directory);
