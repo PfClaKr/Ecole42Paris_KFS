@@ -58,6 +58,7 @@ impl PhysicalMemory {
 	}
 
 	pub fn free_frame(&mut self, address: usize) -> Result<(), PhysicalMemoryError> {
+		assert!(address % 0x1000 == 0, "Address is not 4KB aligned");
 		let index = address / 0x1000 / 0x20;
 		let offset = address / 0x1000 % 0x20;
 

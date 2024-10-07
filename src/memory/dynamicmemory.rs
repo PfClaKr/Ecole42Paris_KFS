@@ -79,7 +79,7 @@ impl HeapAllocator {
 		while order > 0 {
 			order -= 1;
 			let buddy = addr ^ (1 << (order + 12));
-			if self.free_counts[order] < 64 {
+			if self.free_counts[order] < 256 {
 				self.free_lists[order][self.free_counts[order]] = buddy;
 				self.free_counts[order] += 1;
 			}
@@ -95,9 +95,10 @@ impl HeapAllocator {
 		}
 	}
 
-	fn deallocate_order(&mut self, mut addr: usize, mut order: usize) {
+	fn deallocate_order(&mut self, addr: usize, mut order: usize) {
+		let mut current_addr = addr;
 		while order < MAX_ORDER {
-			let buddy = addr ^ (1 << (order + 12));
+			let buddy = current_addr ^ (1 << (order + 12));
 			let buddy_index = self.free_lists[order][..self.free_counts[order]]
 				.iter()
 				.position(|&block| block == buddy);
@@ -105,7 +106,7 @@ impl HeapAllocator {
 			if let Some(index) = buddy_index {
 				self.free_counts[order] -= 1;
 				self.free_lists[order][index] = self.free_lists[order][self.free_counts[order]];
-				addr = addr.min(buddy);
+				current_addr = current_addr.min(buddy);
 				order += 1;
 			} else {
 				break;
@@ -115,7 +116,7 @@ impl HeapAllocator {
 		BITMAP.lock().free_frame(addr).unwrap();
 
 		if self.free_counts[order] < 64 {
-			self.free_lists[order][self.free_counts[order]] = addr;
+			self.free_lists[order][self.free_counts[order]] = current_addr;
 			self.free_counts[order] += 1;
 		}
 	}
