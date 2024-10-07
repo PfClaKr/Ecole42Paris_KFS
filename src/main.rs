@@ -20,20 +20,22 @@ fn welcome_message() {
 	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
 }
 
-#[no_mangle]
-pub extern "C" fn kernel_main() {
-	// let mut page_directory = memory::paging::PageDirectory::new();
-	// let mut page_table = memory::paging::PageTable::new();
+fn init(multiboot_info: usize) {
 	unsafe {
 		include::gdt::load();
-		memory::paging::init_page();
-		// page_directory.map_page(0xCAFEBABE, 0x12345000, &mut page_table);
-		// if let Some(physical_address) = page_directory.translate(0xCAFEBABE, &page_table) {
-		// 	println!("0xCAFEBABE maps to physical address: 0x{:X}", physical_address);
-		// } else {
-		// 	println!("Page not present");
-		// }
 	}
+	let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
+	memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
+}
+
+#[no_mangle]
+pub extern "C" fn kernel_main(magic: u32, multiboot_info: *const u8) {
+	assert_eq!(
+		magic, 0x36d76289,
+		"System have to load by Multiboot2 boot loader."
+	);
+
+	init(multiboot_info as usize);
 	welcome_message();
 	Shell::new().run();
 }
