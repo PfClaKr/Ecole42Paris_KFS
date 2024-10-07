@@ -1,7 +1,7 @@
 use core::arch::asm;
 use crate::println;
 
-use crate::memory::PhysicalMemory;
+use crate::memory::physicalmemory::BITMAP;
 
 const ENTRY_COUNT: usize = 1024;
 const PAGE_SIZE: usize = 4096; // 4kb
@@ -45,9 +45,9 @@ impl PageDirectory {
 		}
 	}
 
-	pub fn get_page_table(&mut self, pdi: u32) -> &mut PageTable {
+	pub fn get_page_table(&mut self, pdi: u32) -> u32 {
 		let page_table = self.entry[pdi as usize];
-		page_table as &mut PageTable
+		page_table
 	}
 
 	pub fn map_page(&mut self, virtual_address: u32, physical_address: u32) {
@@ -57,11 +57,11 @@ impl PageDirectory {
 		let offset = virtual_address & 0xFFF; // 0b11111111_1111
 
 		if self.entry[pdi as usize] == 0 {
-			let page_table = PhysicalMemory::alloc_frame();
-			self.entry[pdi as usize] = page_table as *const _ as u32 | 0x3; // 0x3 = 0b11
+			let page_table = BITMAP.lock().alloc_frame().unwrap();
+			self.entry[pdi as usize] = (&page_table as *const _ as u32) | 0x3; // 0x3 = 0b11
 		}
-		let page_table = self.get_page_table(pdi);
-		page_table.entry[pti as usize] = physical_address | 0x3;
+		// let page_table = self.get_page_table(pdi);
+		// page_table.entry[pti as usize] = physical_address | 0x3;
 	}
 
 	pub fn unmap_page(&mut self, virtual_address: u32) {
@@ -71,14 +71,14 @@ impl PageDirectory {
 		if self.entry[pdi as usize] & 0x1 == 0 {
 			return;
 		}
-		let page_table = self.get_page_table(pdi);
-		if page_table.entry[pti as usize] & 0x1 != 0 {
-			page_table.entry[pti as usize] = 0;
-			// Invalidate the page in the Translation Lookaside Buffer
-			// unsafe {
-			// 	asm!("invlpg [{}]", in(reg) virtual_address, options(nostack, preserves_flags));
-			// }
-		}
+		// let page_table = self.get_page_table(pdi);
+		// if page_table.entry[pti as usize] & 0x1 != 0 {
+		// 	page_table.entry[pti as usize] = 0;
+		// 	// Invalidate the page in the Translation Lookaside Buffer
+		// 	unsafe {
+		// 		asm!("invlpg [{}]", in(reg) virtual_address, options(nostack, preserves_flags));
+		// 	}
+		// }
 	}
 
 	pub fn translate(&self, virtual_address: u32, page_table: &PageTable) -> Option<u32> {
