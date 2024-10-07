@@ -2,6 +2,8 @@
 #![no_main]
 #![feature(naked_functions)]
 
+extern crate alloc;
+
 mod include;
 mod io;
 mod memory;
@@ -23,9 +25,16 @@ fn welcome_message() {
 fn init(multiboot_info: usize) {
 	unsafe {
 		include::gdt::load();
+
+		let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
+		memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
+		memory::dynamicmemory::ALLOCATOR.lock().init();
 	}
-	let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
-	memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
+
+	let mut a = alloc::string::String::new();
+
+	a.push_str("Hello im yugeon");
+	println!("{}", a);
 }
 
 #[no_mangle]

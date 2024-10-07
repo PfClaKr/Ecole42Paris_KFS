@@ -12,7 +12,7 @@ pub enum PhysicalMemoryError {
 	FrameNotInUse,
 }
 
-const N_FRAMES: usize = 1048576;
+pub const N_FRAMES: usize = 1048576;
 const BITMAP_LEN: usize = N_FRAMES / 32;
 
 pub struct PhysicalMemory {
@@ -69,6 +69,13 @@ impl PhysicalMemory {
 			}
 			false => Err(PhysicalMemoryError::FrameNotInUse),
 		}
+	}
+
+	pub fn is_frame_free(&self, frame: usize) -> bool {
+		let index = frame / 32;
+		let offset = frame % 32;
+
+		(self.bitmap[index] & (1 << (31 - offset))) == 0
 	}
 
 	/// ## Alloc_frame
