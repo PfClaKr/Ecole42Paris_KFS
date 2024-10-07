@@ -5,9 +5,9 @@ use crate::memory::physicalmemory::BITMAP;
 use crate::include::symbols;
 
 
-const SYM_KERNEL_START: u32 = symbols::get_kernel_start();
-const SYM_KERNEL_END: u32 = symbols::get_kernel_end();
-const SYM_PAGE_START: u32 = symbols::get_first_page();
+// const SYM_KERNEL_START: *usize = symbols::get_kernel_start();
+// const SYM_KERNEL_END: *usize = symbols::get_kernel_end();
+// const SYM_PAGE_START: *usize = symbols::get_first_page();
 
 // First 768 entries (0–767):
 // These correspond to the lower 3GB (768 * 4MB = 3GB) 
@@ -76,6 +76,7 @@ impl PageDirectory {
 			self.entry[pdi as usize] = (&page_table as *const _ as u32) | 0x3; // 0x3 = 0b11
 		}
 		let page_table = self.get_page_table(pdi);
+		println!("0x{:x}", page_table.entry[pti as usize]);
 		page_table.entry[pti as usize] = physical_address | 0x3;
 	}
 
@@ -87,12 +88,19 @@ impl PageDirectory {
 			return;
 		}
 		let page_table = self.get_page_table(pdi);
-		if page_table.entry[pti as usize] & 0x1 != 0 {
-			page_table.entry[pti as usize] = 0;
-		// 	// Invalidate the page in the Translation Lookaside Buffer
-		// 	unsafe {
-		// 		asm!("invlpg [{}]", in(reg) virtual_address, options(nostack, preserves_flags));
-		// 	}
+		let mut page_table_entry = page_table.entry[pti as usize];
+		if page_table_entry & 0x1 != 0 {
+			// Passing physical memory address to free the frame
+			let frame = page_table_entry & 0xFFFFF000;
+			BITMAP.lock().free_frame(frame as usize).unwrap();
+			// if let Some(physical_address) = self.translate(page_table_entry, page_table) {
+			// 	BITMAP.lock().free_frame(physical_address as usize).unwrap();
+			// }
+			page_table_entry = 0;
+			// Invalidate the page in the Translation Lookaside Buffer
+			unsafe {
+				asm!("invlpg [{}]", in(reg) virtual_address, options(nostack, preserves_flags));
+			}
 		}
 	}
 
@@ -140,6 +148,8 @@ pub fn init() {
 	}
 	page_directory.entry[0] = (&page_table as *const _ as u32) | 0x3;
 
+	page_directory.map_page(0x1000, 0x1000);
+
 	// Map User Space and Kernel Space pages
 	// 768 / 256
 	//
@@ -148,8 +158,8 @@ pub fn init() {
 	// map VGA buffer (at 0xB8000) usually the size of the VGA_BUFFER is 4KB
 	// but can be up to 8KB depending on the display mode
 	
-	let vga_index = VGA_BUFFER_ADDRESS / 0x1000;
-	page_table.entry[vga_index] = VGA_BUFFER_ADDRESS as u32 | 0x1 | 0x01;
+	// let vga_index = VGA_BUFFER_ADDRESS / 0x1000;
+	// page_table.entry[vga_index] = VGA_BUFFER_ADDRESS as u32 | 0x1 | 0x01;
 
 	unsafe {
 		load_page_directory(&page_directory);
