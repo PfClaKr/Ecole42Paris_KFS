@@ -1,8 +1,29 @@
 use core::arch::asm;
 use crate::println;
 
+use crate::memory::PhysicalMemory;
+
 const ENTRY_COUNT: usize = 1024;
 const PAGE_SIZE: usize = 4096; // 4kb
+
+// First 768 entries (0–767):
+// These correspond to the lower 3GB (768 * 4MB = 3GB) 
+// and are used for user-space addresses.
+// This is a common layout in OS design where user applications run.
+//
+// Last 256 entries (768–1023):
+// These correspond to the upper 1GB (256 * 4MB = 1GB)
+// and are used for kernel-space addresses.
+// This is where the kernel runs and manages its resources,
+// like kernel code, stacks, and device memory.
+
+// First 3GB
+const USER_SPACE_LOW: u32 = 0x00000000;
+const USER_SPACE_HIGH: u32 = 0xBFFFFFFF;
+
+// Next 1GB
+const KERNEL_SPACE_LOW: u32 = 0xC0000000;
+const KERNEL_SPACE_HIGH: u32 = 0xFFFFFFFF;
 
 type PageDirectoryEntry = u32;
 type PageTableEntry = u32;
@@ -24,20 +45,40 @@ impl PageDirectory {
 		}
 	}
 
-	pub fn map_page(&mut self, virtual_address: u32, physical_address: u32, page_table: &mut PageTable) {
+	pub fn get_page_table(&mut self, pdi: u32) -> &mut PageTable {
+		let page_table = self.entry[pdi as usize];
+		page_table as &mut PageTable
+	}
+
+	pub fn map_page(&mut self, virtual_address: u32, physical_address: u32) {
 		// 10 page directory index | 10 page table index | 12 offset
 		let pdi = (virtual_address >> 22) & 0x3FF; // 0b11111111_11
 		let pti = (virtual_address >> 12) & 0x3FF;
 		let offset = virtual_address & 0xFFF; // 0b11111111_1111
 
 		if self.entry[pdi as usize] == 0 {
+			let page_table = PhysicalMemory::alloc_frame();
 			self.entry[pdi as usize] = page_table as *const _ as u32 | 0x3; // 0x3 = 0b11
 		}
+		let page_table = self.get_page_table(pdi);
 		page_table.entry[pti as usize] = physical_address | 0x3;
 	}
 
-	pub fn unmap_page() {
-		//
+	pub fn unmap_page(&mut self, virtual_address: u32) {
+		let pdi = (virtual_address >> 22) & 0x3FF;
+		let pti = (virtual_address >> 12) & 0x3FF;
+
+		if self.entry[pdi as usize] & 0x1 == 0 {
+			return;
+		}
+		let page_table = self.get_page_table(pdi);
+		if page_table.entry[pti as usize] & 0x1 != 0 {
+			page_table.entry[pti as usize] = 0;
+			// Invalidate the page in the Translation Lookaside Buffer
+			// unsafe {
+			// 	asm!("invlpg [{}]", in(reg) virtual_address, options(nostack, preserves_flags));
+			// }
+		}
 	}
 
 	pub fn translate(&self, virtual_address: u32, page_table: &PageTable) -> Option<u32> {
@@ -68,19 +109,32 @@ pub fn init_page() {
 	let mut page_directory = PageDirectory::new();
 	let mut page_table = PageTable::new();
 
+	// Identity Mapping first 4MB
+	// virtual address == physical address
+	// purpose: fast and secure initialization
+	// of memory page (below) before kernel load
+	// 	- kernel code and data
+	// 	- essential hardware regions
+	// 	- initial stack and heap
+	//
+	// Identity Mapped addresses are usually remapped after kernel load
+
 	for i in 0..ENTRY_COUNT {
-		// Page Directory
-		let mut page_table = PageTable::new();
-		page_directory.entry[i] = &page_table as *const _ as u32 | 0x1 | 0x01;
-		for j in 0..ENTRY_COUNT {
-			// Page Table
-			let physical_address = j * PAGE_SIZE;
-			page_table.entry[j] = physical_address as u32 | 0x1 | 0x01;
-		}
+		// 0x1000 equals to 4096
+		page_table.entry[i] = (i * 0x1000) as u32 | 0x3;
 	}
-	page_directory.entry[0] = &page_table as *const _ as u32 | 0x1 | 0x01;
-	println!("page_directory: {}", page_directory.entry[0]);
-	println!("page_table: {}", page_table.entry[42]);
+	page_directory.entry[0] = (&page_table as *const _ as u32) | 0x3;
+
+	// Map User Space and Kernel Space pages
+	// 768 / 256
+	//
+	// TODO
+	
+	// map VGA buffer (at 0xB8000) usually the size of the VGA_BUFFER is 4KB
+	// but can be up to 8KB depending on the display mode
+	//
+	// let vga_index = VGA_BUFFER_ADDRESS / 0x1000;
+	// page_table.entry[vga_index] = VGA_BUFFER_ADDRESS as u32 | 0x1 | 0x01;
 
 	unsafe {
 		load_page_directory(&page_directory);

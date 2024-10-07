@@ -4,6 +4,7 @@
 
 mod include;
 mod io;
+mod memory;
 
 use io::shell::Shell;
 
@@ -21,8 +22,17 @@ fn welcome_message() {
 
 #[no_mangle]
 pub extern "C" fn kernel_main() {
+	// let mut page_directory = memory::paging::PageDirectory::new();
+	// let mut page_table = memory::paging::PageTable::new();
 	unsafe {
 		include::gdt::load();
+		memory::paging::init_page();
+		// page_directory.map_page(0xCAFEBABE, 0x12345000, &mut page_table);
+		// if let Some(physical_address) = page_directory.translate(0xCAFEBABE, &page_table) {
+		// 	println!("0xCAFEBABE maps to physical address: 0x{:X}", physical_address);
+		// } else {
+		// 	println!("Page not present");
+		// }
 	}
 	welcome_message();
 	Shell::new().run();
