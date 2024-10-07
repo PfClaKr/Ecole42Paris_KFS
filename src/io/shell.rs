@@ -1,6 +1,7 @@
 use crate::io::hexdump;
 use crate::io::keyboard;
 use crate::io::vga_buffer::WRITER;
+use crate::memory::physicalmemory::BITMAP;
 use crate::{print, println};
 
 const INPUT_SIZE: usize = 77;
@@ -38,7 +39,7 @@ impl Shell {
 		}
 	}
 
-	fn execute_command(&self, input: &[u8]) {
+	fn execute_command(&mut self, input: &[u8]) {
 		use core::str;
 		match str::from_utf8(input) {
 			Ok("clear") => {
@@ -49,8 +50,73 @@ impl Shell {
 			Ok("reboot") => self.reboot(),
 			Ok("stack") => self.print_kernel_stack(),
 			Ok("halt") => self.halt(),
+			Ok("bitmap") => self.bitmap(false),
+			Ok("bitmap --all") => self.bitmap(true),
+			Ok("help") => self.help(),
 			Ok(command) => print!("Command not found: {}\n", command),
 			Err(_) => print!("Command not UTF-8 input\n"),
+		}
+	}
+
+	fn help(&self) {
+		println!(
+			"Usage: [COMMAND]
+For print some information of kernel :
+   stack        visualy see stack status with hex and char
+   bitmap       visualy see allocated physical frame
+      bitmap --all   visualy see all physical frame
+
+Power management :
+   halt         stop cpu before intrruepting (not implement)
+   reboot       reboot the kernel
+
+User experience : 
+   help         presenting the commands in our kernel
+"
+		)
+	}
+
+	fn bitmap(&mut self, all_flag: bool) {
+		let mut line_count = 0;
+		let bitmap = BITMAP.lock().bitmap;
+
+		for (i, entry) in bitmap.iter().enumerate() {
+			if all_flag {
+				println!("Entry {}: {:032b}", i, entry);
+				line_count += 1;
+			}
+
+			for j in 0..32 {
+				let bit_status = (entry >> (31 - j)) & 1;
+				let frame_index = i * 32 + j;
+				let frame_address = frame_index * 0x1000;
+				if bit_status == 1 || all_flag {
+					println!(
+						"Frame {} (0x{:08x}): {}",
+						frame_index,
+						frame_address,
+						if bit_status == 1 { "Allocated" } else { "Free" }
+					);
+					line_count += 1;
+				}
+
+				if line_count == 24 {
+					print!("Press Enter to continue or press x to quit ...");
+					loop {
+						let input = keyboard::read();
+						match input {
+							Some('\n') => break,
+							Some('x') => {
+								println!("");
+								return;
+							}
+							_ => continue,
+						}
+					}
+					line_count = 0;
+					println!("");
+				}
+			}
 		}
 	}
 

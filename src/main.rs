@@ -4,6 +4,7 @@
 
 mod include;
 mod io;
+mod memory;
 
 use io::shell::Shell;
 
@@ -19,11 +20,22 @@ fn welcome_message() {
 	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
 }
 
-#[no_mangle]
-pub extern "C" fn kernel_main() {
+fn init(multiboot_info: usize) {
 	unsafe {
 		include::gdt::load();
 	}
+	let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
+	memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
+}
+
+#[no_mangle]
+pub extern "C" fn kernel_main(magic: u32, multiboot_info: *const u8) {
+	assert_eq!(
+		magic, 0x36d76289,
+		"System have to load by Multiboot2 boot loader."
+	);
+
+	init(multiboot_info as usize);
 	welcome_message();
 	Shell::new().run();
 }

@@ -11,6 +11,7 @@ PHDRS {
 SECTIONS {
 
     . = 2M;
+    kernel_start = .;
 
     .multiboot ALIGN(8) : {
         KEEP(*(.multiboot))
@@ -22,4 +23,6 @@ SECTIONS {
     .rodata ALIGN(4K) : { *(.rodata*) } : rodata
     .data ALIGN(4K) : { *(.data*) } : data
     .bss ALIGN(4K) : { *(.bss*) } : data
+    kernel_end = .;
+    first_page = ALIGN(0x1000);
 }

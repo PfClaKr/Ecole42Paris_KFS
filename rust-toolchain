@@ -1,6 +1,6 @@
 [toolchain]
 channel = "nightly"
-components = ["rust-src", "llvm-tools-preview"]
+components = ["rustfmt", "clippy"]
 
 [build]
 target = "i386-unknown-none"
