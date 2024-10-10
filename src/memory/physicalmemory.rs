@@ -71,15 +71,11 @@ impl PhysicalMemory {
 		}
 	}
 
-	pub fn is_frame_free(&self, address: usize) -> bool {
-		let index = address / 0x1000 / 0x20;
-		let offset = address / 0x1000 % 0x20;
+	pub fn is_frame_free(&self, frame: usize) -> bool {
+		let index = frame / 32;
+		let offset = frame % 32;
 
-		if self.bitmap[index] & (0x80000000 >> offset) == 0 {
-			return true;
-		} else {
-			return false;
-		}
+		(self.bitmap[index] & (1 << (31 - offset))) == 0
 	}
 
 	/// ## Alloc_frame
