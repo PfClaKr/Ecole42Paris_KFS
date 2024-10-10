@@ -1,9 +1,20 @@
 use core::arch::asm;
-use crate::println;
-
-use crate::memory::physicalmemory::BITMAP;
 use crate::include::symbols;
+use crate::{
+	println,
+	print
+};
+use crate::memory::physicalmemory::{
+	BITMAP,
+	PhysicalMemoryError,
+};
 
+#[derive(Debug)]
+pub enum PageFault {
+	DemandPaging, // Accessing the page that is not currently loaded in the memory
+	InvalidMemoryAccess, // Access that memory which is it’s beyond access boundaries or not allocated
+	ProcessViolation, // Write to a read-only page or violates memory protection rules
+}
 
 // const SYM_KERNEL_START: *usize = symbols::get_kernel_start();
 // const SYM_KERNEL_END: *usize = symbols::get_kernel_end();
@@ -64,35 +75,58 @@ impl PageDirectory {
         unsafe { &mut *page_table_ptr }
     }
 
-	pub fn map_page(&mut self, virtual_address: u32, physical_address: u32) {
-		// 10 page directory index | 10 page table index | 12 offset
+	pub fn map_page(&mut self, virtual_address: u32, physical_address: u32) -> Result<(), PhysicalMemoryError> {
 		let pdi = (virtual_address >> 22) & 0x3FF; // 0b11111111_11
 		let pti = (virtual_address >> 12) & 0x3FF;
 		let offset = virtual_address & 0xFFF; // 0b11111111_1111
 
+		// Handled in alloc_frame() function
+		// if BITMAP.lock().is_frame_free(physical_address & 0xFFFFF000) {
+		// 	Err(PhysicalMemoryError::FrameAlreadyInUse);
+		// }
 		if self.entry[pdi as usize] == 0 {
-			// get free physical frame from BITMAP
-			let page_table = BITMAP.lock().alloc_frame().unwrap();
+			let page_table = BITMAP.lock().alloc_frame()?;
+			// BITMAP.lock().alloc_frame_address((physical_address & 0xFFFFF000) as usize).unwrap();
+			// println!("0x{:x}", &page_table); // 0x001e0000
 			self.entry[pdi as usize] = (&page_table as *const _ as u32) | 0x3; // 0x3 = 0b11
 		}
 		let page_table = self.get_page_table(pdi);
-		println!("0x{:x}", page_table.entry[pti as usize]);
-		page_table.entry[pti as usize] = physical_address | 0x3;
+		BITMAP.lock().alloc_frame_address((physical_address & 0xFFFFF000) as usize | 0x3)?;
+		page_table.entry[pti as usize] = (physical_address & 0xFFFFF000) | 0x3;
+
+		// println!("0 0x{:x}", page_table.entry[0] & 0xFFFFF000);
+		// println!("1 0x{:x}", page_table.entry[1] & 0xFFFFF000);
+		// println!("2 0x{:x}", page_table.entry[2] & 0xFFFFF000);
+		// println!("3 0x{:x}", page_table.entry[3] & 0xFFFFF000);
+		println!("pti as {} 0x{:x}", pti as usize, page_table.entry[pti as usize] & 0xFFFFF000);
+
+		// if (BITMAP.lock().is_frame_free((physical_address & 0xFFFFF000) as usize) == true) {
+		// 	println!("frame is not allocated");
+		// } else {
+		// 	println!("frame is allocated");
+		// }
+
+		// let bitmap = BITMAP.lock().bitmap();
+		// for i in 0..(1048576/32) {
+		// 	if bitmap[i] != 0 {
+		// 		print!("{}: {:x}, ", i, bitmap[i]);
+		// 	}
+		// }
+		Ok(())
 	}
 
-	pub fn unmap_page(&mut self, virtual_address: u32) {
+	pub fn unmap_page(&mut self, virtual_address: u32) -> Result<(), PhysicalMemoryError> {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
 
-		if self.entry[pdi as usize] & 0x1 == 0 {
-			return;
-		}
+		// if self.entry[pdi as usize] & 0x1 == 0 {
+		// 	Err(PageFault::InvalidMemoryAccess);
+		// }
 		let page_table = self.get_page_table(pdi);
 		let mut page_table_entry = page_table.entry[pti as usize];
 		if page_table_entry & 0x1 != 0 {
-			// Passing physical memory address to free the frame
 			let frame = page_table_entry & 0xFFFFF000;
-			BITMAP.lock().free_frame(frame as usize).unwrap();
+			BITMAP.lock().free_frame(frame as usize)?;
 			// if let Some(physical_address) = self.translate(page_table_entry, page_table) {
 			// 	BITMAP.lock().free_frame(physical_address as usize).unwrap();
 			// }
@@ -102,6 +136,7 @@ impl PageDirectory {
 				asm!("invlpg [{}]", in(reg) virtual_address, options(nostack, preserves_flags));
 			}
 		}
+		Ok(())
 	}
 
 	pub fn translate(&self, virtual_address: u32, page_table: &PageTable) -> Option<u32> {
@@ -148,7 +183,35 @@ pub fn init() {
 	}
 	page_directory.entry[0] = (&page_table as *const _ as u32) | 0x3;
 
-	page_directory.map_page(0x1000, 0x1000);
+	let _: Result<(), PhysicalMemoryError>;
+	_ = page_directory.map_page(0x1000 * 1024, 0x1000 * 1024).expect("failed");
+	_ = page_directory.map_page(0x1000 * 1025, 0x1000 * 1026).expect("failed");
+	_ = page_directory.map_page(0x1000 * 1026, 0x0022f000).expect("failed");
+	_ = page_directory.map_page(0x1000 * 1027, 0x00240000).expect("failed");
+
+	_ = page_directory.unmap_page(0x1000 * 1024).expect("failed");
+	_ = page_directory.unmap_page(0x1000 * 1028).expect("failed");
+
+	if (BITMAP.lock().is_frame_free(((0x1000 * 1024) as u32 & 0xFFFFF000u32) as usize) == true) {
+		println!("frame is not allocated");
+	} else {
+		println!("frame is allocated");
+	}
+	if (BITMAP.lock().is_frame_free(((0x1000 * 1026) as u32 & 0xFFFFF000u32) as usize) == true) {
+		println!("frame is not allocated");
+	} else {
+		println!("frame is allocated");
+	}
+	if (BITMAP.lock().is_frame_free((0x0022f000u32 & 0xFFFFF000u32) as usize) == true) {
+		println!("frame is not allocated");
+	} else {
+		println!("frame is allocated");
+	}
+	if (BITMAP.lock().is_frame_free((0x00240000u32 & 0xFFFFF000u32) as usize) == true) {
+		println!("frame is not allocated");
+	} else {
+		println!("frame is allocated");
+	}
 
 	// Map User Space and Kernel Space pages
 	// 768 / 256
