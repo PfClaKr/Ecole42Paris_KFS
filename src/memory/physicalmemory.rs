@@ -71,6 +71,13 @@ impl PhysicalMemory {
 		}
 	}
 
+	pub fn is_frame_free(&self, frame: usize) -> bool {
+		let index = frame / 32;
+		let offset = frame % 32;
+
+		(self.bitmap[index] & (1 << (31 - offset))) == 0
+	}
+
 	/// ## Alloc_frame
 	/// Change the bitmap status the very next available frame. \
 	/// Return with first frame address ```usize```. \
