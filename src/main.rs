@@ -26,13 +26,13 @@ fn welcome_message() {
 fn init(multiboot_info: usize) {
 	unsafe {
 		include::gdt::load();
-
+	}
 		let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
 		memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
+		memory::paging::init();
 		memory::dynamicmemory::ALLOCATOR
 			.lock()
 			.init(0x1000, 0xFFFC0000);
-	}
 	use alloc::vec;
 	let mut a = alloc::string::String::new();
 	a.push_str("Hello im yugeon");
