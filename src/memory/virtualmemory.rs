@@ -47,12 +47,12 @@ const PAGE_SIZE: usize = 4096; // 4KB
 
 #[repr(C, align(4096))]
 pub struct PageDirectory {
-	entry: [PageDirectoryEntry; ENTRY_COUNT],
+	pub entry: [PageDirectoryEntry; ENTRY_COUNT],
 }
 
 #[repr(C, align(4096))]
 pub struct PageTable {
-	entry: [PageTableEntry; ENTRY_COUNT],
+	pub entry: [PageTableEntry; ENTRY_COUNT],
 }
 
 impl PageDirectory {
@@ -78,20 +78,10 @@ impl PageDirectory {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
 
-		// assert_eq!(
-		// 	self.entry[pdi as usize] & 0x1,
-		// 	0,
-		// 	"map_page: invalid address"
-		// );
-		// assert!(
-		// 	BITMAP
-		// 		.lock()
-		// 		.is_frame_free(((physical_address & 0xFFF) / PAGE_SIZE as u32) as usize),
-		// 	"map_page: mapping page to unallocated frame"
-		// );
+		// let page_table = 0xFFC00000 + (index * 0x1000);
+
 		if self.entry[pdi as usize] == 0 {
-			let page_directory_entry = BITMAP.lock().alloc_frame()?;
-			self.entry[pdi as usize] = (&page_directory_entry as *const _ as u32) | 0x3;
+			self.entry[pdi as usize] = BITMAP.lock().alloc_frame().unwrap() as u32;
 		}
 		let page_table = self.get_page_table(pdi);
 		page_table.entry[pti as usize] = (physical_address & 0xFFFFF000) | 0x3;
@@ -149,7 +139,12 @@ pub static PAGE_DIRECTORY: Mutex<PageDirectory> = Mutex::new(PageDirectory {
 	entry: [0; ENTRY_COUNT],
 });
 
-use crate::println;
+pub fn enable_recursive() {
+	let pd = &PAGE_DIRECTORY.lock() as *const _ as u32;
+	PAGE_DIRECTORY.lock().entry[1023] = pd | 0x3;
+}
+
+use crate::println; // remove
 
 pub fn init() {
 	// Identity Mapping first 4MB
@@ -162,16 +157,24 @@ pub fn init() {
 	//
 	// Identity Mapped addresses are usually remapped after kernel load
 
-	let _ = BITMAP.lock().alloc_frame_address(0x1000);
-	for i in 0x1..0xFFF {
-		println!("i : {:x}", i);
-		let _ = PAGE_DIRECTORY.lock().map_page(i, i + 0x1000);
-	}
+	println!("Page Directory Address Before Enabling Paging: {:x}", &PAGE_DIRECTORY.lock() as *const _ as u32);
+	enable_recursive();
+	
+	PAGE_DIRECTORY
+		.lock()
+		.map_page(0x0, 0x0)
+		.unwrap();
 
 	// Map User Space and Kernel Space pages
 	// 768 / 256
-	//
-	// TODO
+
+	for entry in PAGE_DIRECTORY.lock().entry.iter_mut().enumerate() {
+		if entry.0 < 256 {
+			// kernel space
+		} else {
+			// user space
+		}
+	}
 
 	// map VGA buffer (at 0xB8000) usually the size of the VGA_BUFFER is 4KB
 	// but can be up to 8KB depending on the display mode
@@ -183,6 +186,8 @@ pub fn init() {
 		load_page_directory();
 		enable_paging();
 	}
+
+	println!("Page Directory Address After Enabling Paging: {:x}", &PAGE_DIRECTORY.lock() as *const _ as u32);
 }
 
 unsafe fn load_page_directory() {
