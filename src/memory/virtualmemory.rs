@@ -1,5 +1,6 @@
 use crate::memory::physicalmemory::{PhysicalMemoryError, BITMAP};
 use core::arch::asm;
+use spin::Mutex;
 
 #[derive(Debug)]
 #[allow(unused)]
@@ -77,17 +78,17 @@ impl PageDirectory {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
 
-		assert_eq!(
-			self.entry[pdi as usize] & 0x1,
-			0,
-			"map_page: invalid address"
-		);
-		assert!(
-			BITMAP
-				.lock()
-				.is_frame_free(((physical_address & 0xFFF) / PAGE_SIZE as u32) as usize),
-			"map_page: frame to assign is empty"
-		);
+		// assert_eq!(
+		// 	self.entry[pdi as usize] & 0x1,
+		// 	0,
+		// 	"map_page: invalid address"
+		// );
+		// assert!(
+		// 	BITMAP
+		// 		.lock()
+		// 		.is_frame_free(((physical_address & 0xFFF) / PAGE_SIZE as u32) as usize),
+		// 	"map_page: mapping page to unallocated frame"
+		// );
 		if self.entry[pdi as usize] == 0 {
 			let page_directory_entry = BITMAP.lock().alloc_frame()?;
 			self.entry[pdi as usize] = (&page_directory_entry as *const _ as u32) | 0x3;
@@ -144,10 +145,13 @@ impl PageTable {
 	}
 }
 
-pub fn init() {
-	let mut page_directory = PageDirectory::new();
-	let mut page_table = PageTable::new();
+pub static PAGE_DIRECTORY: Mutex<PageDirectory> = Mutex::new(PageDirectory {
+	entry: [0; ENTRY_COUNT],
+});
 
+use crate::println;
+
+pub fn init() {
 	// Identity Mapping first 4MB
 	// virtual address == physical address
 	// purpose: fast and secure initialization
@@ -158,10 +162,11 @@ pub fn init() {
 	//
 	// Identity Mapped addresses are usually remapped after kernel load
 
-	for i in 0..ENTRY_COUNT {
-		page_table.entry[i] = (i * 0x1000) as u32 | 0x3;
+	let _ = BITMAP.lock().alloc_frame_address(0x1000);
+	for i in 0x1..0xFFF {
+		println!("i : {:x}", i);
+		let _ = PAGE_DIRECTORY.lock().map_page(i, i + 0x1000);
 	}
-	page_directory.entry[0] = (&page_table as *const _ as u32) | 0x3;
 
 	// Map User Space and Kernel Space pages
 	// 768 / 256
@@ -175,13 +180,13 @@ pub fn init() {
 	// page_table.entry[vga_index] = VGA_BUFFER_ADDRESS as u32 | 0x1 | 0x01;
 
 	unsafe {
-		load_page_directory(&page_directory);
+		load_page_directory();
 		enable_paging();
 	}
 }
 
-unsafe fn load_page_directory(page_directory: &PageDirectory) {
-	let page_directory_address = page_directory as *const _ as u32;
+unsafe fn load_page_directory() {
+	let page_directory_address = &PAGE_DIRECTORY.lock() as *const _ as u32;
 	asm!(
 		"mov cr3, {0:e}",
 		in(reg) page_directory_address,

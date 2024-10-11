@@ -1,3 +1,3 @@
 pub mod physicalmemory;
 
-pub mod paging;
+pub mod virtualmemory;
