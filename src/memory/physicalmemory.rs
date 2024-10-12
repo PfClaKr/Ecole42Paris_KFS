@@ -153,10 +153,10 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 			kernel_start += 0x1000;
 		}
 
-		let multiboot_info_frame = multiboot_info & !0xFFF;
-		BITMAP
-			.lock()
-			.alloc_frame_address(multiboot_info_frame)
-			.unwrap();
+		// let multiboot_info_frame = multiboot_info & !0xFFF;
+		// BITMAP
+		// 	.lock()
+		// 	.alloc_frame_address(multiboot_info_frame)
+		// 	.unwrap();
 	}
 }

@@ -9,6 +9,7 @@ mod io;
 mod memory;
 
 use io::shell::Shell;
+use memory::dynamicmemory::Privilege;
 
 fn welcome_message() {
 	println!("\x1b[5;m   ___  _____     ");
@@ -27,18 +28,20 @@ fn init(multiboot_info: usize) {
 	unsafe {
 		include::gdt::load();
 	}
-		let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
-		memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
-		memory::paging::init();
-		memory::dynamicmemory::ALLOCATOR
-			.lock()
-			.init(0x1000, 0xFFFC0000);
-	use alloc::vec;
+	let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
+	memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
+	// memory::paging::init();
+	memory::dynamicmemory::GLOBAL_ALLOCATOR
+		.lock()
+		.init(0x400000, 0xFFFC0000, Privilege::Kernel);
+	memory::dynamicmemory::USER_ALLOCATOR
+		.lock()
+		.init(0x0, 0x390000, Privilege::User);
 	let mut a = alloc::string::String::new();
 	a.push_str("Hello im yugeon");
 	println!("{}, size: {}\n", a, a.len());
-
-	let b = vec![[0; 1024 * 1000 * 100]]; // 409.6 mb
+	use alloc::vec;
+	let b = vec![[0; 1024 * 1000]];
 }
 
 #[no_mangle]
