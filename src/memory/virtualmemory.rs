@@ -65,15 +65,43 @@ impl PageDirectory {
 		}
 	}
 
+	// #[allow(unused)]
+	// pub fn get_page_table(&mut self, pdi: usize) -> &mut PageTable {
+	// 	let page_table_address = self.entry[pdi as usize] & 0xFFFFF000;
+	// 	let page_table_ptr = page_table_address as *mut PageTable;
+
+	// 	unsafe { &mut *page_table_ptr }
+	// }
+
+	// pub fn map_page(
+	// 	&mut self,
+	// 	virtual_address: usize,
+	// 	physical_address: usize,
+	// ) -> Result<(), PhysicalMemoryError> {
+	// 	// physical address must be set on bitmap before entering in this function
+	// 	let pdi = (virtual_address >> 22) & 0x3FF;
+	// 	let pti = (virtual_address >> 12) & 0x3FF;
+
+	// 	if self.entry[pdi as usize] == 0 {
+	// 		let page_directory_entry = BITMAP.lock().alloc_frame()?;
+	// 		self.entry[pdi as usize] = (&page_directory_entry as *const _ as usize) | 0x3;
+	// 	}
+	// 	let page_table = self.get_page_table(pdi);
+	// 	page_table.entry[pti as usize] = (physical_address & 0xFFFFF000) | 0x3;
+	// 	Ok(())
+	// }
+
 	pub fn get_page_table(&self, address: usize) -> &mut PageTable {
 		let ptr = (0xFFC00000 + (address * 0x1000)) as *mut PageTable;
 		unsafe { &mut *ptr }
 	}
+	
 
 	pub fn map_page(
 		&mut self,
 		virtual_address: usize,
 		physical_address: usize,
+		privilege: usize,
 	) -> Result<(), PhysicalMemoryError> {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
@@ -82,7 +110,12 @@ impl PageDirectory {
 			self.entry[pdi as usize] = BITMAP.lock().alloc_frame().unwrap() as usize;
 		}
 		let page_table = self.get_page_table(pti);
-		page_table.entry[pti] = (physical_address & 0xFFFFF000) | 0x3;
+		// println!("page_table: {:X}", page_table as *const _ as usize);
+		// Invalidate the page in the Translation Lookaside Buffer
+		unsafe {
+			asm!("invlpg [{0:e}]", in(reg) virtual_address, options(nostack, preserves_flags));
+		}
+		page_table.entry[pti] = (physical_address & 0xFFFFF000) | privilege;
 		Ok(())
 	}
 
@@ -115,12 +148,12 @@ impl PageDirectory {
 		if page_table.entry[pti] & 0x1 == 0 {
 			return None;
 		}
-		let frame = page_table.entry[pti] & 0xFFFFF000; // 0b11111111_11111111_11110000_00000000
+		let frame = page_table.entry[pti] & 0xFFFFF000;
 		Some(frame + offset)
 	}
 
 	pub unsafe fn enable_recursive(&mut self) {
-		self.entry[1023] = pda;
+		self.entry[1023] = pda | 0x3;
 	}
 
 	unsafe fn load_page_directory(&mut self) {
@@ -135,7 +168,7 @@ impl PageDirectory {
 	unsafe fn enable_paging(&self) {
 		let mut cr0: usize;
 		asm!("mov {0:e}, cr0", out(reg) cr0);
-		cr0 |= 0x80000000; // 0b10000000_00000000_00000000_00000000
+		cr0 |= 0x80000000;
 		asm!("mov cr0, {0:e}", in(reg) cr0);
 	}
 }
@@ -155,7 +188,7 @@ pub static PAGE_DIRECTORY: Mutex<PageDirectory> = Mutex::new(PageDirectory {
 
 pub static mut pda: usize = 0;
 
-use crate::println; // remove
+use crate::{print,println}; // remove
 
 pub fn init() {
 	// Identity Mapping first 4MB
@@ -177,35 +210,41 @@ pub fn init() {
 	let mut pd_guard = PAGE_DIRECTORY.lock();
 	
 	unsafe {
-		pd_guard.enable_recursive();
 		pda = &*pd_guard as *const _ as usize;
-		for i in 0..ENTRY_COUNT {
-			pd_guard.map_page(i * 0x1000, i * 0x1000).unwrap();
+		if pda % 0x1000usize != 0 {
+			loop {
+				println!("ERROR");
+			}
 		}
+		pda &= 0xFFFFF000;
+		pd_guard.enable_recursive();
+		// for i in 0..ENTRY_COUNT * 4 * 0x4000 { // 0x4000000
+		// 	pd_guard.map_page(i, i, 0x7).unwrap();
+		// }
 	}
 
 	unsafe {
-		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY as *const _ as usize);
-		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock() as *const _ as usize);
-		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock().entry as *const _ as usize);
-		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock().entry[0] as *const _ as usize);
-		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock().entry[0]);
+		// println!("PAGE_DIRECTORY: {:X}", &pd_guard as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &pd_guard as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &pd_guard.entry as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &pd_guard.entry[0] as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &pd_guard.entry[0]);
 		// println!("...");
-		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", PAGE_DIRECTORY.lock().entry[0]);
-		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", &PAGE_DIRECTORY.lock().entry[0]);		
-		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", &PAGE_DIRECTORY.lock().entry[0] as *const _ as usize);		
+		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", pd_guard.entry[0]); +
+		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", &pd_guard.entry[0]);		
+		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", &pd_guard.entry[0] as *const _ as usize);		
 		// println!("...");
-		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", PAGE_DIRECTORY.lock().entry[1]);
-		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", &PAGE_DIRECTORY.lock().entry[1]);		
-		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", &PAGE_DIRECTORY.lock().entry[1] as *const _ as usize);		
+		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", pd_guard.entry[1]); +
+		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", &pd_guard.entry[1]);		
+		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", &pd_guard.entry[1] as *const _ as usize);		
 		// println!("...");
-		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", PAGE_DIRECTORY.lock().entry[1022]);
-		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", &PAGE_DIRECTORY.lock().entry[1022]);
-		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", &PAGE_DIRECTORY.lock().entry[1022] as *const _ as usize);
+		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", pd_guard.entry[1022]);
+		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", &pd_guard.entry[1022]);
+		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", &pd_guard.entry[1022] as *const _ as usize);
 		// println!("...");
-		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", PAGE_DIRECTORY.lock().entry[1023]);
-		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", &PAGE_DIRECTORY.lock().entry[1023]);
-		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", &PAGE_DIRECTORY.lock().entry[1023] as *const _ as usize);
+		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", pd_guard.entry[1023]);
+		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", &pd_guard.entry[1023]);
+		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", &pd_guard.entry[1023] as *const _ as usize);
 		// println!("...");
 		// println!("PAGE_DIRECTORY_ADDRESS: {:X}", PAGE_DIRECTORY_ADDRESS);
 	}
@@ -237,15 +276,15 @@ pub fn init() {
 
 	// let vga_index = VGA_BUFFER_ADDRESS / 0x1000;
 	// page_table.entry[vga_index] = VGA_BUFFER_ADDRESS | 0x1 | 0x01;
-
+	loop {
+		
+	}
 	unsafe {
 		pd_guard.load_page_directory();
 		pd_guard.enable_paging();
-	}
-
-	println!("test");
-	loop {
-		
+		loop {
+			
+		}
 	}
 }
 
