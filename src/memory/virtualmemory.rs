@@ -1,5 +1,5 @@
-use crate::memory::physicalmemory::{PhysicalMemoryError, BITMAP};
-use core::arch::asm;
+use crate::{io::println, memory::physicalmemory::{PhysicalMemoryError, BITMAP}};
+use core::{arch::asm, ops::Deref};
 use spin::Mutex;
 
 #[derive(Debug)]
@@ -38,6 +38,8 @@ pub enum PageFault {
 // const KERNEL_SPACE_LOW: usize = 0xC0000000;
 // const KERNEL_SPACE_HIGH: usize = 0xFFFFFFFF;
 
+// use super::physicalmemory::PAGE_DIRECTORY_ADDRESS;
+
 type PageDirectoryEntry = usize;
 type PageTableEntry = usize;
 
@@ -55,18 +57,19 @@ pub struct PageTable {
 	pub entry: [PageTableEntry; ENTRY_COUNT],
 }
 
+#[allow(unused)]
 impl PageDirectory {
 	pub fn new() -> Self {
 		PageDirectory {
 			entry: [0; ENTRY_COUNT],
 		}
 	}
-	#[allow(unused)]
-	pub fn get_page_table(&mut self, address: usize) -> &mut PageTable {
+
+	pub fn get_page_table(&self, address: usize) -> &mut PageTable {
 		let ptr = (0xFFC00000 + (address * 0x1000)) as *mut PageTable;
 		unsafe { &mut *ptr }
 	}
-	#[allow(unused)]
+
 	pub fn map_page(
 		&mut self,
 		virtual_address: usize,
@@ -74,24 +77,19 @@ impl PageDirectory {
 	) -> Result<(), PhysicalMemoryError> {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
-		let page_table = self.get_page_table(pti);
-
-		if PAGE_DIRECTORY.lock().entry[pdi as usize] == 0 {
-			PAGE_DIRECTORY.lock().entry[pdi as usize] = BITMAP.lock().alloc_frame().unwrap() as usize;
+		
+		if self.entry[pdi as usize] == 0 {
+			self.entry[pdi as usize] = BITMAP.lock().alloc_frame().unwrap() as usize;
 		}
+		let page_table = self.get_page_table(pti);
 		page_table.entry[pti] = (physical_address & 0xFFFFF000) | 0x3;
 		Ok(())
 	}
-	#[allow(unused)]
+
 	pub fn unmap_page(&mut self, virtual_address: usize) -> Result<(), PhysicalMemoryError> {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
 
-		assert_eq!(
-			self.entry[pdi] & 0x1,
-			0,
-			"unmap_page: invalid address"
-		);
 		let page_table = self.get_page_table(pdi);
 		let mut page_table_entry = page_table.entry[pti];
 		if page_table_entry & 0x1 != 0 {
@@ -105,7 +103,7 @@ impl PageDirectory {
 		}
 		Ok(())
 	}
-	#[allow(unused)]
+
 	pub fn translate(&self, virtual_address: usize, page_table: &PageTable) -> Option<usize> {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
@@ -119,6 +117,26 @@ impl PageDirectory {
 		}
 		let frame = page_table.entry[pti] & 0xFFFFF000; // 0b11111111_11111111_11110000_00000000
 		Some(frame + offset)
+	}
+
+	pub unsafe fn enable_recursive(&mut self) {
+		self.entry[1023] = pda;
+	}
+
+	unsafe fn load_page_directory(&mut self) {
+		let page_directory_address = pda;
+		asm!(
+			"mov cr3, {0:e}",
+			in(reg) page_directory_address,
+			options(nostack)
+		);
+	}
+	
+	unsafe fn enable_paging(&self) {
+		let mut cr0: usize;
+		asm!("mov {0:e}, cr0", out(reg) cr0);
+		cr0 |= 0x80000000; // 0b10000000_00000000_00000000_00000000
+		asm!("mov cr0, {0:e}", in(reg) cr0);
 	}
 }
 
@@ -135,10 +153,7 @@ pub static PAGE_DIRECTORY: Mutex<PageDirectory> = Mutex::new(PageDirectory {
 	entry: [0; ENTRY_COUNT],
 });
 
-pub fn enable_recursive() {
-	let pd = &PAGE_DIRECTORY as *const _ as usize;
-	PAGE_DIRECTORY.lock().entry[1023] = pd | 0x3;
-}
+pub static mut pda: usize = 0;
 
 use crate::println; // remove
 
@@ -153,15 +168,51 @@ pub fn init() {
 	//
 	// Identity Mapped addresses are usually remapped after kernel load
 
-	enable_recursive();
-
 	// let mut page_table = PageTable::new();
 	// for i in 0..ENTRY_COUNT {
 	// 	page_table.entry[i] = (i * 0x1000) as usize | 0x3;
 	// }
 	// PAGE_DIRECTORY.lock().entry[0] = (&page_table as *const _ as usize) | 0x3;
+	
+	let mut pd_guard = PAGE_DIRECTORY.lock();
+	
+	unsafe {
+		pd_guard.enable_recursive();
+		pda = &*pd_guard as *const _ as usize;
+		for i in 0..ENTRY_COUNT {
+			pd_guard.map_page(i * 0x1000, i * 0x1000).unwrap();
+		}
+	}
 
-	PAGE_DIRECTORY.lock().map_page(0x0, 0x0).unwrap();
+	unsafe {
+		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock() as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock().entry as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock().entry[0] as *const _ as usize);
+		// println!("PAGE_DIRECTORY: {:X}", &PAGE_DIRECTORY.lock().entry[0]);
+		// println!("...");
+		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", PAGE_DIRECTORY.lock().entry[0]);
+		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", &PAGE_DIRECTORY.lock().entry[0]);		
+		// println!("PAGE_DIRECTORY VALUE at [0]: {:X}", &PAGE_DIRECTORY.lock().entry[0] as *const _ as usize);		
+		// println!("...");
+		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", PAGE_DIRECTORY.lock().entry[1]);
+		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", &PAGE_DIRECTORY.lock().entry[1]);		
+		// println!("PAGE_DIRECTORY VALUE at [1]: {:X}", &PAGE_DIRECTORY.lock().entry[1] as *const _ as usize);		
+		// println!("...");
+		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", PAGE_DIRECTORY.lock().entry[1022]);
+		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", &PAGE_DIRECTORY.lock().entry[1022]);
+		// println!("PAGE_DIRECTORY VALUE at [1022]: {:X}", &PAGE_DIRECTORY.lock().entry[1022] as *const _ as usize);
+		// println!("...");
+		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", PAGE_DIRECTORY.lock().entry[1023]);
+		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", &PAGE_DIRECTORY.lock().entry[1023]);
+		// println!("PAGE_DIRECTORY VALUE at [1023]: {:X}", &PAGE_DIRECTORY.lock().entry[1023] as *const _ as usize);
+		// println!("...");
+		// println!("PAGE_DIRECTORY_ADDRESS: {:X}", PAGE_DIRECTORY_ADDRESS);
+	}
+
+	// pd_guard.map_page(0x0, 0x0).unwrap();
+	// pd_guard.map_page(0xb8000, 0xb8000).unwrap();
+	// pd_guard.map_page(0x400000, 0x400000).unwrap();
 
 	// for i in 0..ENTRY_COUNT {
 	// 	PAGE_DIRECTORY
@@ -188,23 +239,13 @@ pub fn init() {
 	// page_table.entry[vga_index] = VGA_BUFFER_ADDRESS | 0x1 | 0x01;
 
 	unsafe {
-		load_page_directory();
-		enable_paging();
+		pd_guard.load_page_directory();
+		pd_guard.enable_paging();
+	}
+
+	println!("test");
+	loop {
+		
 	}
 }
 
-unsafe fn load_page_directory() {
-	let page_directory_address = &PAGE_DIRECTORY as *const _ as usize;
-	asm!(
-		"mov cr3, {0:e}",
-		in(reg) page_directory_address,
-		options(nostack)
-	);
-}
-
-unsafe fn enable_paging() {
-	let mut cr0: usize;
-	asm!("mov {0:e}, cr0", out(reg) cr0);
-	cr0 |= 0x80000000; // 0b10000000_00000000_00000000_00000000
-	asm!("mov cr0, {0:e}", in(reg) cr0);
-}
