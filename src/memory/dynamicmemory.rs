@@ -1,4 +1,5 @@
 use crate::memory::physicalmemory::BITMAP;
+use crate::memory::virtualmemory::PAGE_DIRECTORY;
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 
@@ -108,25 +109,38 @@ impl HeapAllocator {
 
 		let virtual_addr = self.next_virtual_addr;
 		let num_pages = 1 << order;
+		crate::println!(
+			"phisical_addr: 0x{:x}, virtual_addr : 0x{:x}, order: {}, num_pages : {}",
+			physical_addr,
+			virtual_addr,
+			order,
+			num_pages
+		);
 
 		for i in 0..num_pages {
 			let cur_virtual_addr = virtual_addr + i * PAGE_SIZE;
 			let cur_physical_addr = physical_addr + i * PAGE_SIZE;
-			unsafe {
-				BITMAP.lock().alloc_frame_address(cur_physical_addr);
-				// page_directory.lock().map_page(
-				// 	cur_virtual_addr,
-				// 	cur_physical_addr,
-				// 	if self.privilege == Privilege::Kernel {
-				// 		0x3
-				// 	} else {
-				// 		0x7
-				// 	},
-				// )?;
-			}
+
+			BITMAP
+				.lock()
+				.alloc_frame_address(cur_physical_addr)
+				.unwrap();
+			PAGE_DIRECTORY
+				.lock()
+				.map_page(
+					cur_virtual_addr,
+					cur_physical_addr,
+					if self.privilege == Privilege::Kernel {
+						0x3
+					} else {
+						0x7
+					},
+				)
+				.unwrap();
 		}
 
 		self.next_virtual_addr += num_pages * PAGE_SIZE;
+		crate::println!("next_virtual_addr : 0x{:x}", self.next_virtual_addr);
 
 		while order > 0 {
 			order -= 1;
@@ -136,7 +150,6 @@ impl HeapAllocator {
 				self.free_counts[order] += 1;
 			}
 		}
-
 		virtual_addr as *mut u8
 	}
 
@@ -215,8 +228,8 @@ impl HeapAllocator {
 		let num_pages = 1 << order;
 		for i in 0..num_pages {
 			let cur_virtual_addr = addr + i * PAGE_SIZE;
-			BITMAP.lock().free_frame(cur_virtual_addr);
-			// page_directory.lock().unmap_page(cur_virtual_addr)?;
+			// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
+			PAGE_DIRECTORY.lock().unmap_page(cur_virtual_addr).unwrap();
 		}
 
 		if self.free_counts[order] < LIST_COUNT {
@@ -259,10 +272,17 @@ pub static USER_ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::ne
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator> {
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-		self.lock().allocate(layout)
+		crate::println!("alloc");
+		let address = self.lock().allocate(layout) as usize;
+		if address == 0 {
+			return null_mut();
+		}
+		address as *mut u8
+		// loop {}
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+		crate::println!("dealloc");
 		self.lock().deallocate(ptr, layout)
 	}
 }

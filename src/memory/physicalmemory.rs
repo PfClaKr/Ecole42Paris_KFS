@@ -1,7 +1,6 @@
 use crate::include::multiboot;
 use crate::include::symbols;
-#[allow(unused)]
-use crate::println;
+use crate::memory::virtualmemory::PDA;
 use spin::Mutex;
 
 #[derive(Debug)]
@@ -40,6 +39,7 @@ impl PhysicalMemory {
 	}
 
 	fn alloc_bitmap(&mut self, address: usize) -> Result<(), PhysicalMemoryError> {
+		assert!(address % 0x1000 == 0, "Address is not 4KB aligned");
 		let index = address / 0x1000 / 0x20;
 		let offset = address / 0x1000 % 0x20;
 
@@ -73,8 +73,15 @@ impl PhysicalMemory {
 	}
 
 	pub fn is_frame_free(&self, frame: usize) -> bool {
-		let index = frame / 32;
-		let offset = frame % 32;
+		let index = frame / 0x20;
+		let offset = frame % 0x20;
+
+		(self.bitmap[index] & (1 << (31 - offset))) == 0
+	}
+
+	pub fn is_address_free(&self, address: usize) -> bool {
+		let index = address / 0x1000 / 0x20;
+		let offset = address / 0x1000 / 0x20;
 
 		(self.bitmap[index] & (1 << (31 - offset))) == 0
 	}
@@ -116,17 +123,17 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 
 		while (entry as usize) < entry_end {
 			// println!(
-			// 	"memory type: {}\nentry : {}\nentry_end : {}\n",
+			// 	"memory type: {}, bass_addr : 0x{:x},  length : 0x{:x}",
 			// 	(*entry)._type,
-			// 	entry as usize,
-			// 	entry_end
+			// 	(*entry).base_addr,
+			// 	(*entry).length
 			// );
 			if (*entry)._type == 0 || (*entry)._type == 8 {
 				break;
 			}
 			if (*entry)._type != 1 {
 				let mut count = 0;
-				let base_addr = (*entry).base_addr;
+				let base_addr = (*entry).base_addr & !0xFFF;
 				let end_addr = (*entry).base_addr + (*entry).length;
 
 				while base_addr + count < end_addr {
@@ -140,7 +147,7 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 			entry = entry.offset(
 				entry_size / core::mem::size_of::<multiboot::MultibootMemoryMapEntry>() as isize,
 			);
-			// println!("memory map entry: {:?}\n", (*entry));
+			// println!("memory map entry: {:?}", (*entry));
 		}
 
 		BITMAP.lock().alloc_frame_address(0x0).unwrap();
@@ -153,10 +160,19 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 			kernel_start += 0x1000;
 		}
 
-		// let multiboot_info_frame = multiboot_info & !0xFFF;
-		// BITMAP
-		// 	.lock()
-		// 	.alloc_frame_address(multiboot_info_frame)
-		// 	.unwrap();
+		let mut mapping_start = PDA;
+		let mapping_end = PDA + 0x1000;
+		while mapping_start <= mapping_end {
+			BITMAP.lock().alloc_frame_address(mapping_start).unwrap();
+			mapping_start += 0x1000;
+		}
+
+		let multiboot_info_address = multiboot_info & !0xFFF;
+		if BITMAP.lock().is_address_free(multiboot_info_address) {
+			BITMAP
+				.lock()
+				.alloc_frame_address(multiboot_info_address)
+				.unwrap();
+		}
 	}
 }

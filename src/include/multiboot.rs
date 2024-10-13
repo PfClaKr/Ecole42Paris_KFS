@@ -1,5 +1,6 @@
 use crate::include::panic::panic;
 use crate::kernel_main;
+// use crate::include::symbols;
 use core::arch::asm;
 
 #[repr(C)]
@@ -50,26 +51,36 @@ pub struct MultibootMemoryMapEntry {
 	reserved: u32,
 }
 
+#[link_section = ".bss"]
+#[no_mangle]
+static mut STACK: [u8; 4096] = [0; 4096];
+
 #[naked]
 #[no_mangle]
 pub extern "C" fn start() -> ! {
 	unsafe {
 		asm!(
+			// "mov esp, {stack_end}",
+			"lea esp, [STACK + 4096]",
 			"xor ebp, ebp",
+
 			"push eax",
 			"push ecx",
 			"push edx",
+
 			"push ebx", // Physical address multiboot2 info
 			"push eax", // magic value multiboo2 bootloader, 0x36d76289
 			"call {kernel_main}",
 			"call {panic}",
 			"pop eax",
 			"pop eax",
+
 			"pop edx",
 			"pop ecx",
 			"pop eax",
 			kernel_main = sym kernel_main,
 			panic = sym panic,
+			// stack_end = sym symbols::get_stack_end,
 			options(noreturn)
 		);
 	}
