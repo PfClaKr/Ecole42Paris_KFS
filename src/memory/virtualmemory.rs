@@ -4,7 +4,7 @@ use core::arch::asm;
 use core::ptr::NonNull;
 use spin::Mutex;
 
-pub const PDA: usize = 0x21000;
+pub const PDA: usize = 0x1000;
 
 pub struct PageTableEntry(usize);
 
@@ -42,12 +42,12 @@ impl PageTable {
 	}
 
 	fn set_entry(&mut self, index: usize, address: usize, flags: usize) {
-		crate::println!(
-			"set_entry table: index : {}, address : 0x{:x}, flags : {}",
-			index,
-			address,
-			flags
-		);
+		// crate::println!(
+		// 	"set_entry table: index : {}, address : 0x{:x}, flags : {}",
+		// 	index,
+		// 	address,
+		// 	flags
+		// );
 		self.mut_table()[index] = PageTableEntry::new(address, flags)
 	}
 }
@@ -99,12 +99,12 @@ impl PageDirectory {
 	}
 
 	pub fn set_entry(&mut self, index: usize, address: usize, flags: usize) {
-		crate::println!(
-			"set_entry directory: index : {}, address : 0x{:x}, flags : {}",
-			index,
-			address,
-			flags
-		);
+		// crate::println!(
+		// 	"set_entry directory: index : {}, address : 0x{:x}, flags : {}",
+		// 	index,
+		// 	address,
+		// 	flags
+		// );
 		self.mut_dir()[index] = PageDirectoryEntry::new(address, flags)
 	}
 
@@ -141,7 +141,6 @@ impl PageDirectory {
 		Ok(())
 	}
 
-	#[allow(unused)]
 	pub fn unmap_page(&mut self, virtual_address: usize) -> Result<(), PhysicalMemoryError> {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
@@ -191,8 +190,12 @@ pub fn init(multiboot_info: usize) {
 			.unwrap();
 		kernel_start_page += 0x1000;
 	}
-	if multiboot_info <= symbols::get_kernel_start() as usize
-		&& multiboot_info >= symbols::get_kernel_end() as usize
+	crate::println!("kernel_start: {}", symbols::get_kernel_start as usize);
+	crate::println!("kernel_end: {}", symbols::get_kernel_end as usize);
+	crate::println!("multiboot info: {}", multiboot_info);
+
+	if !(multiboot_info >= symbols::get_kernel_start() as usize
+		&& multiboot_info <= symbols::get_kernel_end() as usize)
 	{
 		PAGE_DIRECTORY
 			.lock()

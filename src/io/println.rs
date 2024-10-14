@@ -18,5 +18,8 @@ use core::fmt;
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
 	use core::fmt::Write;
+	// if vga_buffer::WRITER.is_locked() {
+	// 	unsafe { vga_buffer::WRITER.force_unlock() };
+	// }
 	vga_buffer::WRITER.lock().write_fmt(args).unwrap();
 }

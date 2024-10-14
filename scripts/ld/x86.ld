@@ -10,7 +10,7 @@ PHDRS {
 
 SECTIONS {
 
-    . = 1M;
+    . = 2M;
     kernel_start = .;
 
     .multiboot ALIGN(8) : {
@@ -27,15 +27,10 @@ SECTIONS {
         *(.bss*)
     } : data
 
-    /*.stack BLOCK(4K) : ALIGN(4K)
+   .stack : ALIGN(4K)
     {
-        . = ALIGN(4K);
-        stack_start = .;
         *(.stack)
-        . = ALIGN(4K);
-        stack_end = .;
-    }*/
+    } : data
 
     kernel_end = .;
-    first_page = ALIGN(0x1000);
 }

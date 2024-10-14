@@ -51,7 +51,7 @@ pub struct MultibootMemoryMapEntry {
 	reserved: u32,
 }
 
-#[link_section = ".bss"]
+#[link_section = ".stack"]
 #[no_mangle]
 static mut STACK: [u8; 4096] = [0; 4096];
 
@@ -61,7 +61,7 @@ pub extern "C" fn start() -> ! {
 	unsafe {
 		asm!(
 			// "mov esp, {stack_end}",
-			"lea esp, [STACK + 4096]",
+			"lea esp, [STACK + 4070]",
 			"xor ebp, ebp",
 
 			"push eax",

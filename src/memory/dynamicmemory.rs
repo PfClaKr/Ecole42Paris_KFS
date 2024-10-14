@@ -5,7 +5,7 @@ use core::ptr::null_mut;
 
 const MAX_ORDER: usize = 10;
 const PAGE_SIZE: usize = 0x1000;
-const LIST_COUNT: usize = 512;
+const LIST_COUNT: usize = 400;
 
 #[derive(PartialEq)]
 pub enum Privilege {
@@ -33,11 +33,15 @@ impl HeapAllocator {
 
 	#[allow(clippy::needless_range_loop)]
 	pub fn init(&mut self, start_addr: usize, end_addr: usize, privilege: Privilege) {
+		assert!(start_addr % 0x1000 == 0, "Address is not 4KB aligned");
+		assert!(end_addr % 0x1000 == 0, "Address is not 4KB aligned");
 		self.privilege = privilege;
 		self.next_virtual_addr = start_addr;
 
 		let mut frame = start_addr / PAGE_SIZE;
 		let end_frame = end_addr / PAGE_SIZE;
+		let mut index = 0;
+		let mut j;
 
 		while frame < end_frame {
 			let mut allocated = false;
@@ -45,12 +49,15 @@ impl HeapAllocator {
 				let block_size = 1 << order;
 				if frame + block_size <= end_frame {
 					let mut can_allocate = true;
-					for i in 0..block_size {
-						if !BITMAP.lock().is_frame_free(frame + i) {
+					j = 0;
+					while j < block_size && frame + j + index < 32767 {
+						if !BITMAP.lock().is_frame_free(frame + j + index) {
 							can_allocate = false;
 							break;
 						}
+						j += 1;
 					}
+					index += j;
 
 					if can_allocate {
 						let addr = frame * PAGE_SIZE;
@@ -89,6 +96,7 @@ impl HeapAllocator {
 		let size = layout.size().max(layout.align()).max(PAGE_SIZE);
 		let order = self.size_to_order(size);
 
+		crate::println!("alloc size : {}, order : {}", size, order.unwrap());
 		match order {
 			Some(o) => self.allocate_order(o),
 			_ => self.allocate_large(size),
@@ -198,6 +206,7 @@ impl HeapAllocator {
 		let size = layout.size().max(layout.align()).max(PAGE_SIZE);
 		let order = self.size_to_order(size);
 
+		crate::println!("dealloc size : {}, order : {}", size, order.unwrap());
 		match order {
 			Some(o) => self.deallocate_order(ptr as usize, o),
 			_ => {
@@ -208,6 +217,20 @@ impl HeapAllocator {
 	}
 
 	fn deallocate_order(&mut self, addr: usize, mut order: usize) {
+		let num_pages = 1 << order;
+		crate::println!(
+			"deallocate addr : 0x{:x}, num_pages : {}, order : {}, virtual addr : 0x{:x}",
+			addr,
+			num_pages,
+			order,
+			addr * PAGE_SIZE
+		);
+		for i in 0..num_pages {
+			let cur_virtual_addr = addr + i * PAGE_SIZE;
+			// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
+			PAGE_DIRECTORY.lock().unmap_page(cur_virtual_addr).unwrap();
+		}
+
 		let mut current_addr = addr;
 		while order < MAX_ORDER {
 			let buddy = current_addr ^ (1 << (order + 12));
@@ -224,14 +247,6 @@ impl HeapAllocator {
 				break;
 			}
 		}
-
-		let num_pages = 1 << order;
-		for i in 0..num_pages {
-			let cur_virtual_addr = addr + i * PAGE_SIZE;
-			// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
-			PAGE_DIRECTORY.lock().unmap_page(cur_virtual_addr).unwrap();
-		}
-
 		if self.free_counts[order] < LIST_COUNT {
 			self.free_lists[order][self.free_counts[order]] = current_addr;
 			self.free_counts[order] += 1;
@@ -272,7 +287,6 @@ pub static USER_ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::ne
 
 unsafe impl GlobalAlloc for Locked<HeapAllocator> {
 	unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-		crate::println!("alloc");
 		let address = self.lock().allocate(layout) as usize;
 		if address == 0 {
 			return null_mut();
@@ -282,7 +296,6 @@ unsafe impl GlobalAlloc for Locked<HeapAllocator> {
 	}
 
 	unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-		crate::println!("dealloc");
 		self.lock().deallocate(ptr, layout)
 	}
 }
