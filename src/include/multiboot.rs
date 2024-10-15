@@ -1,6 +1,5 @@
 use crate::include::panic::panic;
 use crate::kernel_main;
-// use crate::include::symbols;
 use core::arch::asm;
 
 #[repr(C)]
@@ -61,7 +60,7 @@ pub extern "C" fn start() -> ! {
 	unsafe {
 		asm!(
 			// "mov esp, {stack_end}",
-			"lea esp, [STACK + 4070]",
+			"lea esp, [STACK + 4096]",
 			"xor ebp, ebp",
 
 			"push eax",

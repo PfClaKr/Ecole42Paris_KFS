@@ -14,6 +14,7 @@ pub enum PhysicalMemoryError {
 pub const N_FRAMES: usize = 1048576;
 const BITMAP_LEN: usize = N_FRAMES / 32;
 
+#[repr(align(4096))]
 pub struct PhysicalMemory {
 	pub bitmap: [u32; BITMAP_LEN],
 	next: usize,
@@ -122,7 +123,7 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 		let entry_end = map as *const _ as usize + tag_size as usize;
 
 		while (entry as usize) < entry_end {
-			// println!(
+			// crate::println!(
 			// 	"memory type: {}, bass_addr : 0x{:x},  length : 0x{:x}",
 			// 	(*entry)._type,
 			// 	(*entry).base_addr,
@@ -147,7 +148,6 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 			entry = entry.offset(
 				entry_size / core::mem::size_of::<multiboot::MultibootMemoryMapEntry>() as isize,
 			);
-			// println!("memory map entry: {:?}", (*entry));
 		}
 
 		BITMAP.lock().alloc_frame_address(0x0).unwrap();
@@ -159,6 +159,7 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 			BITMAP.lock().alloc_frame_address(kernel_start).unwrap();
 			kernel_start += 0x1000;
 		}
+		// crate::println!("kernel alloc: 0x{:x}, 0x{:x}",kernel_start,  kernel_end);
 
 		let mut mapping_start = PDA;
 		let mapping_end = PDA + 0x1000;
@@ -166,6 +167,7 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 			BITMAP.lock().alloc_frame_address(mapping_start).unwrap();
 			mapping_start += 0x1000;
 		}
+		// crate::println!("map alloc: 0x{:x}, 0x{:x}", mapping_start, mapping_end);
 
 		let multiboot_info_address = multiboot_info & !0xFFF;
 		if BITMAP.lock().is_address_free(multiboot_info_address) {
@@ -174,5 +176,6 @@ pub fn init(memory_map: usize, multiboot_info: usize) {
 				.alloc_frame_address(multiboot_info_address)
 				.unwrap();
 		}
+		// crate::println!("multiboot alloc: 0x{:x}", multiboot_info_address);
 	}
 }

@@ -78,9 +78,8 @@ User experience :
 
 	fn bitmap(&mut self, all_flag: bool) {
 		let mut line_count = 0;
-		let bitmap = BITMAP.lock().bitmap;
 
-		for (i, entry) in bitmap.iter().enumerate() {
+		for (i, entry) in BITMAP.lock().bitmap.iter().enumerate() {
 			if all_flag {
 				println!("Entry {}: {:032b}", i, entry);
 				line_count += 1;

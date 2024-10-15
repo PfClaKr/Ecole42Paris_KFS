@@ -85,8 +85,7 @@ impl PageDirectory {
 
 	pub fn clear(&mut self) {
 		for i in 0..self.ref_dir().len() {
-			self.mut_dir()[i] = PageDirectoryEntry::new(0, 0);
-			if i == self.ref_dir().len() - 1 {}
+			self.mut_dir()[i] = PageDirectoryEntry::new(0, 0x2);
 		}
 	}
 
@@ -135,7 +134,8 @@ impl PageDirectory {
 		}
 		assert!(
 			!page_table.ref_table()[pti].is_present(),
-			"page entry already present."
+			"page entry already present. address: {:x}",
+			virtual_address
 		);
 		page_table.set_entry(pti, physical_address, flags);
 		Ok(())
@@ -190,9 +190,9 @@ pub fn init(multiboot_info: usize) {
 			.unwrap();
 		kernel_start_page += 0x1000;
 	}
-	crate::println!("kernel_start: {}", symbols::get_kernel_start as usize);
-	crate::println!("kernel_end: {}", symbols::get_kernel_end as usize);
-	crate::println!("multiboot info: {}", multiboot_info);
+	// crate::println!("kernel_start: {}", symbols::get_kernel_start as usize);
+	// crate::println!("kernel_end: {}", symbols::get_kernel_end as usize);
+	// crate::println!("multiboot info: {}", multiboot_info);
 
 	if !(multiboot_info >= symbols::get_kernel_start() as usize
 		&& multiboot_info <= symbols::get_kernel_end() as usize)
@@ -203,6 +203,7 @@ pub fn init(multiboot_info: usize) {
 			.unwrap();
 	}
 	PAGE_DIRECTORY.lock().set_entry(1023, PDA, 0x3);
+	unsafe { asm!("invlpg [0]") };
 	enable(PDA);
 	*PAGE_DIRECTORY.lock() = unsafe {
 		PageDirectory(

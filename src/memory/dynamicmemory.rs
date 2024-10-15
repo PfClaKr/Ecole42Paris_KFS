@@ -5,7 +5,7 @@ use core::ptr::null_mut;
 
 const MAX_ORDER: usize = 10;
 const PAGE_SIZE: usize = 0x1000;
-const LIST_COUNT: usize = 400;
+const LIST_COUNT: usize = 64;
 
 #[derive(PartialEq)]
 pub enum Privilege {
@@ -75,7 +75,7 @@ impl HeapAllocator {
 				frame += 1;
 			}
 		}
-		crate::println!("list: {:?}", self.free_counts);
+		// crate::println!("list: {:?}", self.free_counts);
 	}
 
 	fn size_to_order(&self, size: usize) -> Option<usize> {
@@ -96,7 +96,7 @@ impl HeapAllocator {
 		let size = layout.size().max(layout.align()).max(PAGE_SIZE);
 		let order = self.size_to_order(size);
 
-		crate::println!("alloc size : {}, order : {}", size, order.unwrap());
+		// crate::println!("alloc size : {}, order : {}", size, order.unwrap());
 		match order {
 			Some(o) => self.allocate_order(o),
 			_ => self.allocate_large(size),
@@ -117,13 +117,13 @@ impl HeapAllocator {
 
 		let virtual_addr = self.next_virtual_addr;
 		let num_pages = 1 << order;
-		crate::println!(
-			"phisical_addr: 0x{:x}, virtual_addr : 0x{:x}, order: {}, num_pages : {}",
-			physical_addr,
-			virtual_addr,
-			order,
-			num_pages
-		);
+		// crate::println!(
+		// 	"phisical_addr: 0x{:x}, virtual_addr : 0x{:x}, order: {}, num_pages : {}",
+		// 	physical_addr,
+		// 	virtual_addr,
+		// 	order,
+		// 	num_pages
+		// );
 
 		for i in 0..num_pages {
 			let cur_virtual_addr = virtual_addr + i * PAGE_SIZE;
@@ -148,7 +148,7 @@ impl HeapAllocator {
 		}
 
 		self.next_virtual_addr += num_pages * PAGE_SIZE;
-		crate::println!("next_virtual_addr : 0x{:x}", self.next_virtual_addr);
+		// crate::println!("next_virtual_addr : 0x{:x}", self.next_virtual_addr);
 
 		while order > 0 {
 			order -= 1;
@@ -164,7 +164,7 @@ impl HeapAllocator {
 	fn allocate_large(&mut self, size: usize) -> *mut u8 {
 		let mut remaining_size = size;
 		let mut base_addr: *mut u8 = null_mut();
-		let mut current_addr: *mut u8 = null_mut();
+		let mut _current_addr: *mut u8 = null_mut();
 
 		while remaining_size > 0 {
 			let order = (0..=MAX_ORDER)
@@ -187,14 +187,9 @@ impl HeapAllocator {
 
 			if base_addr.is_null() {
 				base_addr = addr;
-			} else if addr as usize
-				!= current_addr as usize + (current_addr as usize - base_addr as usize)
-			{
-				// self.deallocate_large(base_addr as usize, size - remaining_size);
-				return null_mut();
 			}
 
-			current_addr = addr;
+			_current_addr = addr;
 			remaining_size = remaining_size.saturating_sub(block_size);
 		}
 
@@ -206,7 +201,7 @@ impl HeapAllocator {
 		let size = layout.size().max(layout.align()).max(PAGE_SIZE);
 		let order = self.size_to_order(size);
 
-		crate::println!("dealloc size : {}, order : {}", size, order.unwrap());
+		// crate::println!("dealloc size : {}, order : {}", size, order.unwrap());
 		match order {
 			Some(o) => self.deallocate_order(ptr as usize, o),
 			_ => {
@@ -218,13 +213,13 @@ impl HeapAllocator {
 
 	fn deallocate_order(&mut self, addr: usize, mut order: usize) {
 		let num_pages = 1 << order;
-		crate::println!(
-			"deallocate addr : 0x{:x}, num_pages : {}, order : {}, virtual addr : 0x{:x}",
-			addr,
-			num_pages,
-			order,
-			addr * PAGE_SIZE
-		);
+		// crate::println!(
+		// 	"deallocate addr : 0x{:x}, num_pages : {}, order : {}, virtual addr : 0x{:x}",
+		// 	addr,
+		// 	num_pages,
+		// 	order,
+		// 	addr * PAGE_SIZE
+		// );
 		for i in 0..num_pages {
 			let cur_virtual_addr = addr + i * PAGE_SIZE;
 			// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
