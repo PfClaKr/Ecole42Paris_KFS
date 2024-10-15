@@ -113,8 +113,9 @@ pub static BITMAP: Mutex<PhysicalMemory> = Mutex::new(PhysicalMemory {
 /// ## Init physical memory
 /// Take Multiboot memorymap and mark unuseable memory in bitmap. \
 /// Mark the space of already take by kernel. ex) gdt, vga, ps2, etc...
-pub fn init(memory_map: usize, multiboot_info: usize) {
+pub fn init(multiboot_info: usize) {
 	unsafe {
+		let memory_map = multiboot::parse_multiboot_info(multiboot_info, 6).unwrap();
 		let map = memory_map as *const multiboot::MultibootMemoryMapTag;
 		let tag_size = (*map).size;
 		let entry_size = (*map).entry_size as isize;

@@ -5,7 +5,7 @@ use core::ptr::null_mut;
 
 const MAX_ORDER: usize = 10;
 const PAGE_SIZE: usize = 0x1000;
-const LIST_COUNT: usize = 64;
+const LIST_COUNT: usize = 512;
 
 #[derive(PartialEq)]
 pub enum Privilege {
@@ -19,6 +19,7 @@ pub struct HeapAllocator {
 	free_counts: [usize; MAX_ORDER + 1],
 	privilege: Privilege,
 	next_virtual_addr: usize,
+	paging_status: bool,
 }
 
 impl HeapAllocator {
@@ -28,15 +29,23 @@ impl HeapAllocator {
 			free_counts: [0; MAX_ORDER + 1],
 			privilege: Privilege::None,
 			next_virtual_addr: 0,
+			paging_status: false,
 		}
 	}
 
 	#[allow(clippy::needless_range_loop)]
-	pub fn init(&mut self, start_addr: usize, end_addr: usize, privilege: Privilege) {
+	pub fn init(
+		&mut self,
+		start_addr: usize,
+		end_addr: usize,
+		privilege: Privilege,
+		paging_status: bool,
+	) {
 		assert!(start_addr % 0x1000 == 0, "Address is not 4KB aligned");
 		assert!(end_addr % 0x1000 == 0, "Address is not 4KB aligned");
 		self.privilege = privilege;
 		self.next_virtual_addr = start_addr;
+		self.paging_status = paging_status;
 
 		let mut frame = start_addr / PAGE_SIZE;
 		let end_frame = end_addr / PAGE_SIZE;
@@ -45,7 +54,7 @@ impl HeapAllocator {
 
 		while frame < end_frame {
 			let mut allocated = false;
-			for order in (0..=MAX_ORDER).rev() {
+			for order in 0..=MAX_ORDER {
 				let block_size = 1 << order;
 				if frame + block_size <= end_frame {
 					let mut can_allocate = true;
@@ -93,107 +102,119 @@ impl HeapAllocator {
 	}
 
 	fn allocate(&mut self, layout: Layout) -> *mut u8 {
-		let size = layout.size().max(layout.align()).max(PAGE_SIZE);
+		let size = layout.size().max(layout.align());
 		let order = self.size_to_order(size);
+		crate::println!("alloc size : {}, order : {}", size, order.unwrap());
 
-		// crate::println!("alloc size : {}, order : {}", size, order.unwrap());
 		match order {
-			Some(o) => self.allocate_order(o),
-			_ => self.allocate_large(size),
+			Some(o) => {
+				if self.free_counts[o] > 0 {
+					let physical_address = self.free_lists[o][self.free_counts[o] - 1];
+					self.free_counts[o] -= 1;
+					self.allocate_address(physical_address, o)
+				} else {
+					let mut higher_order = o + 1;
+					while higher_order <= MAX_ORDER && self.free_counts[higher_order] == 0 {
+						higher_order += 1;
+					}
+
+					if higher_order <= MAX_ORDER {
+						self.allocate_split(higher_order, o)
+					} else {
+						self.allocate_merge(o)
+					}
+				}
+			}
+			None => null_mut(),
 		}
 	}
 
-	fn allocate_order(&mut self, mut order: usize) -> *mut u8 {
-		while order <= MAX_ORDER && self.free_counts[order] == 0 {
-			order += 1;
+	fn allocate_split(&mut self, higher_order: usize, target_order: usize) -> *mut u8 {
+		let physical_address = self.free_lists[higher_order][self.free_counts[higher_order] - 1];
+		self.free_counts[higher_order] -= 1;
+
+		let mut current_order = higher_order;
+		while current_order > target_order {
+			current_order -= 1;
+			let buddy = physical_address ^ (1 << (current_order + 12));
+			if self.free_counts[current_order] < LIST_COUNT {
+				self.free_lists[current_order][self.free_counts[current_order]] = buddy;
+				self.free_counts[current_order] += 1;
+			}
 		}
 
-		if order > MAX_ORDER {
-			return null_mut();
+		self.allocate_address(physical_address, target_order)
+	}
+
+	fn allocate_merge(&mut self, target_order: usize) -> *mut u8 {
+		let mut current_order = target_order;
+		while current_order > 0 {
+			current_order -= 1;
+			let required_blocks = 1 << (target_order - current_order);
+
+			if self.free_counts[current_order] >= required_blocks {
+				let mut base_addr =
+					self.free_lists[current_order][self.free_counts[current_order] - 1];
+				self.free_counts[current_order] -= 1;
+
+				for _ in 1..required_blocks {
+					let buddy = base_addr ^ (1 << (current_order + 12));
+					if let Some(index) = self.free_lists[current_order]
+						[..self.free_counts[current_order]]
+						.iter()
+						.position(|&x| x == buddy)
+					{
+						self.free_lists[current_order]
+							.swap(index, self.free_counts[current_order] - 1);
+						self.free_counts[current_order] -= 1;
+					} else {
+						return null_mut();
+					}
+					base_addr = base_addr.min(buddy);
+				}
+				return self.allocate_address(base_addr, 1 << target_order);
+			}
 		}
+		null_mut()
+	}
 
-		let physical_addr = self.free_lists[order][self.free_counts[order] - 1];
-		self.free_counts[order] -= 1;
-
-		let virtual_addr = self.next_virtual_addr;
+	fn allocate_address(&mut self, physical_address: usize, order: usize) -> *mut u8 {
+		let virtual_address = self.next_virtual_addr;
 		let num_pages = 1 << order;
-		// crate::println!(
-		// 	"phisical_addr: 0x{:x}, virtual_addr : 0x{:x}, order: {}, num_pages : {}",
-		// 	physical_addr,
-		// 	virtual_addr,
-		// 	order,
-		// 	num_pages
-		// );
-
 		for i in 0..num_pages {
-			let cur_virtual_addr = virtual_addr + i * PAGE_SIZE;
-			let cur_physical_addr = physical_addr + i * PAGE_SIZE;
+			let cur_virtual_addr = virtual_address + i * PAGE_SIZE;
+			let cur_physical_addr = physical_address + i * PAGE_SIZE;
+
+			crate::println!(
+				"allocate : physical 0x{:x}, virtual 0x{:x}, num_pages {}, order {}",
+				cur_physical_addr,
+				cur_virtual_addr,
+				num_pages,
+				order
+			);
 
 			BITMAP
 				.lock()
 				.alloc_frame_address(cur_physical_addr)
 				.unwrap();
-			PAGE_DIRECTORY
-				.lock()
-				.map_page(
-					cur_virtual_addr,
-					cur_physical_addr,
-					if self.privilege == Privilege::Kernel {
-						0x3
-					} else {
-						0x7
-					},
-				)
-				.unwrap();
+			if self.paging_status {
+				PAGE_DIRECTORY
+					.lock()
+					.map_page(
+						cur_virtual_addr,
+						cur_physical_addr,
+						if self.privilege == Privilege::Kernel {
+							0x3
+						} else {
+							0x7
+						},
+					)
+					.unwrap();
+			}
 		}
 
 		self.next_virtual_addr += num_pages * PAGE_SIZE;
-		// crate::println!("next_virtual_addr : 0x{:x}", self.next_virtual_addr);
-
-		while order > 0 {
-			order -= 1;
-			let buddy = physical_addr ^ (1 << (order + 12));
-			if self.free_counts[order] < LIST_COUNT {
-				self.free_lists[order][self.free_counts[order]] = buddy;
-				self.free_counts[order] += 1;
-			}
-		}
-		virtual_addr as *mut u8
-	}
-
-	fn allocate_large(&mut self, size: usize) -> *mut u8 {
-		let mut remaining_size = size;
-		let mut base_addr: *mut u8 = null_mut();
-		let mut _current_addr: *mut u8 = null_mut();
-
-		while remaining_size > 0 {
-			let order = (0..=MAX_ORDER)
-				.rev()
-				.find(|&o| {
-					let block_size = 1 << (o + 12);
-					block_size <= remaining_size && self.free_counts[o] > 0
-				})
-				.unwrap_or(0);
-
-			let block_size = 1 << (order + 12);
-			let addr = self.allocate_order(order);
-
-			if addr.is_null() {
-				// if !base_addr.is_null() {
-				// 	self.deallocate_large(base_addr as usize, size - remaining_size);
-				// }
-				return null_mut();
-			}
-
-			if base_addr.is_null() {
-				base_addr = addr;
-			}
-
-			_current_addr = addr;
-			remaining_size = remaining_size.saturating_sub(block_size);
-		}
-
-		base_addr
+		virtual_address as *mut u8
 	}
 
 	#[allow(clippy::manual_div_ceil)]

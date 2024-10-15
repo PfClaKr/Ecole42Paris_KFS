@@ -31,36 +31,40 @@ fn alloc_test() {
 	b.push_str("Hello im yugeon");
 	println!("{}, size: {}\n", b, b.len());
 
-	// use alloc::vec;
-	// for i in 0..100 {
-	// 	let b = vec![[0; 4096]];
-	// }
+	use alloc::vec;
+	let _b = vec![[0; 4096 * 60]];
+	// loop {}
 }
 
 #[allow(unused)]
-fn init(multiboot_info: usize) {
+fn init(multiboot_info: usize, paging_status: bool) {
 	unsafe {
 		include::gdt::load();
 	}
-	let memory_map_addr = include::multiboot::parse_multiboot_info(multiboot_info, 6);
-	memory::physicalmemory::init(memory_map_addr.unwrap() as usize, multiboot_info);
-	memory::virtualmemory::init(multiboot_info);
-	memory::dynamicmemory::USER_ALLOCATOR
-		.lock()
-		.init(0x3F0000, 0xBFFF000, Privilege::User);
-	memory::dynamicmemory::GLOBAL_ALLOCATOR
-		.lock()
-		.init(0x3FF000, 0xFFFBF000, Privilege::Kernel);
+	memory::physicalmemory::init(multiboot_info);
+	memory::virtualmemory::init(multiboot_info, paging_status);
+	memory::dynamicmemory::USER_ALLOCATOR.lock().init(
+		0x100000,
+		0x800B_5000,
+		Privilege::User,
+		paging_status,
+	);
+	memory::dynamicmemory::GLOBAL_ALLOCATOR.lock().init(
+		0x800B_6000,
+		0xBFFE_0000,
+		Privilege::Kernel,
+		paging_status,
+	);
 	alloc_test();
 }
 
 #[no_mangle]
-pub extern "C" fn kernel_main(magic: u32, multiboot_info: *const u8) {
+pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 	assert_eq!(
 		magic, 0x36d76289,
 		"System have to load by Multiboot2 boot loader."
 	);
-	init(multiboot_info as usize);
+	init(multiboot_info, true);
 	welcome_message();
 	Shell::new().run();
 }

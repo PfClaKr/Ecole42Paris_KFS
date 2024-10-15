@@ -171,7 +171,10 @@ pub static PAGE_DIRECTORY: Mutex<PageDirectory> = Mutex::new(PageDirectory(
 	false,
 ));
 
-pub fn init(multiboot_info: usize) {
+pub fn init(multiboot_info: usize, paging_status: bool) {
+	if paging_status == false {
+		return;
+	}
 	let mut kernel_start_page = symbols::get_kernel_start() as usize & !0xFFF;
 	let kernel_end_page = symbols::get_kernel_end() as usize & !0xFFF;
 	let multiboot_frame_add = multiboot_info & !0xFFF;
@@ -202,6 +205,7 @@ pub fn init(multiboot_info: usize) {
 			.map_page(multiboot_frame_add, multiboot_frame_add, 0x3)
 			.unwrap();
 	}
+	// PAGE_DIRECTORY.lock().map_page(0xC0000000, 0xC0000000, 0x3).unwrap();
 	PAGE_DIRECTORY.lock().set_entry(1023, PDA, 0x3);
 	unsafe { asm!("invlpg [0]") };
 	enable(PDA);

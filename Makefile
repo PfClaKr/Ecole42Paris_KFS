@@ -20,7 +20,7 @@ kfs:
 	$(RUSTC) build -Zbuild-std=core,alloc --release --target=arch-i386/$(TARGET).json
 
 run:
-	$(QEMU) -m 4G -cdrom $(ISO) -no-reboot -d int -display gtk,zoom-to-fit=on
+	$(QEMU) -m 3G -no-reboot -d int -display gtk,zoom-to-fit=on -cdrom $(ISO)
 
 debug-run:
 	$(QEMU) -s -S -cdrom $(ISO) -no-reboot -d int,cpu_reset
