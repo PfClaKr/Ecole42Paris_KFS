@@ -5,6 +5,7 @@ use crate::memory::physicalmemory::BITMAP;
 use crate::{print, println};
 
 const INPUT_SIZE: usize = 77;
+const TAB_SIZE: usize = 4;
 
 pub struct Shell {
 	prompt: &'static str,
@@ -192,6 +193,9 @@ User experience :
 							input[*len] = b'\0';
 							print!("{}", '\x7f');
 						}
+					}
+					'\x09' => {
+						print!("{}", " ".repeat(TAB_SIZE));
 					}
 					'\x01' => {
 						self.switch_shell(1, input, len);

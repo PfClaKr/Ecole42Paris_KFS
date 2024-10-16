@@ -217,67 +217,135 @@ impl HeapAllocator {
 		virtual_address as *mut u8
 	}
 
-	#[allow(clippy::manual_div_ceil)]
-	fn deallocate(&mut self, ptr: *mut u8, layout: Layout) {
-		let size = layout.size().max(layout.align()).max(PAGE_SIZE);
-		let order = self.size_to_order(size);
+	/// ### Similar to size_to_order but ends at MAX_ORDER and returns
+	/// return value \
+	/// - usize: 0 > usize > max_order \
+	/// - -1: size < PAGE_SIZE
+	fn match_order(&self, max_order: usize, size: usize) -> i32 {
+		let mut order: i32 = -1;
+		let mut block_size = PAGE_SIZE;
+		while block_size < size && order <= max_order as i32 {
+			block_size *= 2;
+			order += 1;
+		}
+		order
+	}
 
-		// crate::println!("dealloc size : {}, order : {}", size, order.unwrap());
+	#[allow(unused)]
+    pub fn deallocate(&mut self, addr: *mut u8, layout: Layout) {
+        let size = layout.size().max(layout.align());
+        let order = self.size_to_order(size);
+        let mut physical_address = addr as usize;
+
+		// crate::println!("before list: {:?}", self.free_counts);
 		match order {
-			Some(o) => self.deallocate_order(ptr as usize, o),
-			_ => {
-				let num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-				self.deallocate_large(ptr as usize, num_pages * PAGE_SIZE);
+			Some(order) => {
+				// physical
+				self.free_lists[order][self.free_counts[order] - 1] = physical_address;
+				self.free_counts[order] += 1;
+				// virtual
+				// if paging == true
+				let num_pages = 1 << order;
+				for i in 0..num_pages {
+					let virtual_addr = physical_address + i * PAGE_SIZE;
+					PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+				}
+				crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, physical_address);
+			}
+			None => {
+				// goal     : handle deallocation of exceeding MAX_ORDER memory section
+				// condition: order > MAX_ORDER
+				// state    : non testable -> alloc more than MAX_ORDER causes page fault
+				//
+				let mut remain_size: usize = 0;
+				let mut dealloc_size: usize = 0;
+				let mut order: i32 = 0;
+				let mut o = size / PAGE_SIZE;
+				while order < 0 && remain_size == 0 {
+					remain_size = size - dealloc_size; // size % PAGE_SIZE
+					order = self.match_order(o, remain_size); // size / PAGE_SIZE
+					if order < 0 && remain_size == 0 {
+						crate::println!("deallocated successfully: no leaks");
+						break;
+					}
+					// physical
+					// why indexing error? over 512
+					self.free_lists[order as usize][self.free_counts[order as usize] - 1] = physical_address;
+					self.free_counts[order as usize] += 1;
+					// virtual
+					let num_pages = 1 << order;
+					for i in 0..num_pages {
+						let virtual_addr = physical_address + i * PAGE_SIZE;
+						PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+					}
+					dealloc_size = order as usize * PAGE_SIZE;
+				}
+				crate::println!("size: {}, addr: 0x{:X}", size, physical_address);
 			}
 		}
-	}
+    }
 
-	fn deallocate_order(&mut self, addr: usize, mut order: usize) {
-		let num_pages = 1 << order;
-		// crate::println!(
-		// 	"deallocate addr : 0x{:x}, num_pages : {}, order : {}, virtual addr : 0x{:x}",
-		// 	addr,
-		// 	num_pages,
-		// 	order,
-		// 	addr * PAGE_SIZE
-		// );
-		for i in 0..num_pages {
-			let cur_virtual_addr = addr + i * PAGE_SIZE;
-			// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
-			PAGE_DIRECTORY.lock().unmap_page(cur_virtual_addr).unwrap();
-		}
+	// #[allow(clippy::manual_div_ceil)]
+	// fn deallocate(&mut self, ptr: *mut u8, layout: Layout) {
+	// 	let size = layout.size().max(layout.align()).max(PAGE_SIZE);
+	// 	let order = self.size_to_order(size);
 
-		let mut current_addr = addr;
-		while order < MAX_ORDER {
-			let buddy = current_addr ^ (1 << (order + 12));
-			let buddy_index = self.free_lists[order][..self.free_counts[order]]
-				.iter()
-				.position(|&block| block == buddy);
+	// 	// crate::println!("dealloc size : {}, order : {}", size, order.unwrap());
+	// 	match order {
+	// 		Some(o) => self.deallocate_order(ptr as usize, o),
+	// 		_ => {
+	// 			let num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+	// 			self.deallocate_large(ptr as usize, num_pages * PAGE_SIZE);
+	// 		}
+	// 	}
+	// }
 
-			if let Some(index) = buddy_index {
-				self.free_counts[order] -= 1;
-				self.free_lists[order][index] = self.free_lists[order][self.free_counts[order]];
-				current_addr = current_addr.min(buddy);
-				order += 1;
-			} else {
-				break;
-			}
-		}
-		if self.free_counts[order] < LIST_COUNT {
-			self.free_lists[order][self.free_counts[order]] = current_addr;
-			self.free_counts[order] += 1;
-		}
-	}
+	// fn deallocate_order(&mut self, addr: usize, mut order: usize) {
+	// 	let num_pages = 1 << order;
+	// 	// crate::println!(
+	// 	// 	"deallocate addr : 0x{:x}, num_pages : {}, order : {}, virtual addr : 0x{:x}",
+	// 	// 	addr,
+	// 	// 	num_pages,
+	// 	// 	order,
+	// 	// 	addr * PAGE_SIZE
+	// 	// );
+	// 	for i in 0..num_pages {
+	// 		let cur_virtual_addr = addr + i * PAGE_SIZE;
+	// 		// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
+	// 		PAGE_DIRECTORY.lock().unmap_page(cur_virtual_addr).unwrap();
+	// 	}
 
-	#[allow(clippy::manual_div_ceil)]
-	fn deallocate_large(&mut self, ptr: usize, size: usize) {
-		let num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-		for i in 0..num_pages {
-			let page_addr = ptr + i * PAGE_SIZE;
-			let order = self.size_to_order(PAGE_SIZE).unwrap();
-			self.deallocate_order(page_addr, order);
-		}
-	}
+	// 	let mut current_addr = addr;
+	// 	while order < MAX_ORDER {
+	// 		let buddy = current_addr ^ (1 << (order + 12));
+	// 		let buddy_index = self.free_lists[order][..self.free_counts[order]]
+	// 			.iter()
+	// 			.position(|&block| block == buddy);
+
+	// 		if let Some(index) = buddy_index {
+	// 			self.free_counts[order] -= 1;
+	// 			self.free_lists[order][index] = self.free_lists[order][self.free_counts[order]];
+	// 			current_addr = current_addr.min(buddy);
+	// 			order += 1;
+	// 		} else {
+	// 			break;
+	// 		}
+	// 	}
+	// 	if self.free_counts[order] < LIST_COUNT {
+	// 		self.free_lists[order][self.free_counts[order]] = current_addr;
+	// 		self.free_counts[order] += 1;
+	// 	}
+	// }
+
+	// #[allow(clippy::manual_div_ceil)]
+	// fn deallocate_large(&mut self, ptr: usize, size: usize) {
+	// 	let num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+	// 	for i in 0..num_pages {
+	// 		let page_addr = ptr + i * PAGE_SIZE;
+	// 		let order = self.size_to_order(PAGE_SIZE).unwrap();
+	// 		self.deallocate_order(page_addr, order);
+	// 	}
+	// }
 }
 
 pub struct Locked<A> {
