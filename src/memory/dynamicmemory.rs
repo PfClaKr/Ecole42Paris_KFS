@@ -267,10 +267,10 @@ impl HeapAllocator {
 	fn match_order(&self, size: usize) -> Option<usize> {
 		let mut order: usize = 0;
 		let mut block_size = PAGE_SIZE;
-		if block_size < size {
+		if block_size > size {
 			None
 		} else {
-			while block_size < size && order <= MAX_ORDER {
+			while block_size < size && order < MAX_ORDER {
 				block_size *= 2;
 				order += 1;
 			}
@@ -282,63 +282,65 @@ impl HeapAllocator {
     pub fn deallocate(&mut self, addr: *mut u8, layout: Layout) {
         let size = layout.size().max(layout.align());
         let order = self.size_to_order(size);
-        let mut physical_address = addr as usize;
+        let mut virtual_address = addr as usize;
 
-		crate::println!("{:?}", layout);
-		crate::println!("before list: {:?}", self.free_counts);
+		// crate::println!("{:?}", layout);
+		// crate::println!("before list: {:?}", self.free_counts);
+		// crate::println!("deallocate: size: {} order: {:?}", size, order);
 		match order {
 			Some(order) => {
 				// physical
-				self.free_lists[order][self.free_counts[order] - 1] = physical_address;
+				self.free_lists[order][self.free_counts[order]] = virtual_address;
 				self.free_counts[order] += 1;
 				// virtual
 				// if paging == true
 				let num_pages = 1 << order;
 				for i in 0..num_pages {
-					let virtual_addr = physical_address + i * PAGE_SIZE;
+					let virtual_addr = virtual_address + i * PAGE_SIZE;
 					PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
 				}
-				crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, physical_address);
+				// crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, virtual_address);
 			}
 			None => {
-				// goal     : handle deallocation of exceeding MAX_ORDER memory section
-				// condition: order > MAX_ORDER
-				// state    : non testable -> alloc more than MAX_ORDER causes page fault
-				//
+				// crate::println!("Inside partial deallocate");
 				let mut remain_size: usize = size;
 				let mut dealloc_size: usize = 0;
 				while remain_size != 0 {
+					// crate::println!("deallocate: inside loop: rs {}, ds {}, va 0x{:X}", remain_size, dealloc_size, virtual_address);
+					// crate::println!("list: {:?}", self.free_counts);
 					match self.match_order(remain_size) {
 						Some(order) => {
+							// crate::println!("deallocate: in some: order {}", order);
 							// physical
-							// why indexing error? over 512
-							self.free_lists[order as usize][self.free_counts[order as usize] - 1] = physical_address;
+							self.free_lists[order as usize][self.free_counts[order as usize] - 1] = virtual_address;
 							self.free_counts[order as usize] += 1;
 							// virtual
 							let num_pages = 1 << order;
 							for i in 0..num_pages {
-								let virtual_addr = physical_address + i * PAGE_SIZE;
+								let virtual_addr = virtual_address + i * PAGE_SIZE;
 								PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
-								crate::println!("deallocated vm: 0x{:X}", virtual_addr);
 							}
+							// crate::println!("deallocated va: 0x{:X}", virtual_address + num_pages * PAGE_SIZE);
+							virtual_address = virtual_address + num_pages * PAGE_SIZE;
 							dealloc_size = num_pages * PAGE_SIZE;
 							remain_size -= dealloc_size;
-							crate::println!("deallocation process: freed {}, left {}", dealloc_size, remain_size);
+							// crate::println!("deallocation process: freed {}, left {}", dealloc_size, remain_size);
 						}
 						None => {
+							// crate::println!("deallocate: in None");
 							if remain_size == 0 {
 								crate::println!("deallocated successfully: no leaks ({})", remain_size);
 							} else {	
-								crate::println!("deallocated failed: possible leaks ({})", remain_size);
+								crate::println!("deallocate failed: possible leaks ({})", remain_size);
 							}
 							break;
 						}
 					}
 				}
-				crate::println!("size: {}, addr: 0x{:X}", size, physical_address);
+				// crate::println!("size: {}, addr: 0x{:X}", size, virtual_address);
 			}
 		}
-		crate::println!("after list: {:?}", self.free_counts);
+		// crate::println!("after list: {:?}", self.free_counts);
     }
 
 	// #[allow(clippy::manual_div_ceil)]
