@@ -172,7 +172,7 @@ pub static PAGE_DIRECTORY: Mutex<PageDirectory> = Mutex::new(PageDirectory(
 ));
 
 pub fn init(multiboot_info: usize, paging_status: bool) {
-	if paging_status == false {
+	if !paging_status {
 		return;
 	}
 	let mut kernel_start_page = symbols::get_kernel_start() as usize & !0xFFF;

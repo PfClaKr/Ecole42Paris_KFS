@@ -26,13 +26,14 @@ fn welcome_message() {
 fn alloc_test() {
 	let mut a = alloc::string::String::new();
 	a.push_str("Hello im yugeon");
-	println!("{}, size: {}\n", a, a.len());
+	println!("{}, size: {}", a, a.len());
 	let mut b = alloc::string::String::new();
 	b.push_str("Hello im yugeon");
-	println!("{}, size: {}\n", b, b.len());
+	println!("{}, size: {}", b, b.len());
 
 	use alloc::vec;
-	let _b = vec![[0; 4096 * 1800]];
+	let _b = vec![[0; 4096 * 5000]];
+	println!("vec size : {}", _b.len());
 }
 
 #[allow(unused)]
@@ -62,6 +63,6 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 		"System have to load by Multiboot2 boot loader."
 	);
 	init(multiboot_info, true);
-	// welcome_message();
+	welcome_message();
 	Shell::new().run();
 }
