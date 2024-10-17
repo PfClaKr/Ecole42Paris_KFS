@@ -32,7 +32,7 @@ fn alloc_test() {
 	println!("{}, size: {}\n", b, b.len());
 
 	use alloc::vec;
-	let _b = vec![[0; 4096 * 200]];
+	let _b = vec![[0; 4096 * 600]];
 }
 
 #[allow(unused)]

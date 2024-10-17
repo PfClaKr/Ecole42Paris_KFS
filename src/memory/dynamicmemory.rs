@@ -3,7 +3,7 @@ use crate::memory::virtualmemory::PAGE_DIRECTORY;
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 
-const MAX_ORDER: usize = 10;
+const MAX_ORDER: usize = 11;
 const PAGE_SIZE: usize = 0x1000;
 const LIST_COUNT: usize = 128;
 
@@ -46,6 +46,14 @@ impl HeapAllocator {
 		self.privilege = privilege;
 		self.next_virtual_addr = start_addr;
 		self.paging_status = paging_status;
+
+		for i in (start_addr..=end_addr).step_by(4096) {
+			let pdi = i >> 22;
+			if !PAGE_DIRECTORY.lock().ref_dir()[pdi].is_present() {
+				let page_table_add = BITMAP.lock().alloc_frame().unwrap();
+				PAGE_DIRECTORY.lock().set_entry(pdi, page_table_add, 0x3);
+			}
+		}
 
 		let mut frame = start_addr / PAGE_SIZE;
 		let end_frame = end_addr / PAGE_SIZE;
@@ -107,7 +115,7 @@ impl HeapAllocator {
 		match order {
 			Some(o) => {
 				if self.free_counts[o] > 0 {
-					let physical_address = self.free_lists[o][self.free_counts[o] - 11];
+					let physical_address = self.free_lists[o][self.free_counts[o] - 1];
 					self.free_counts[o] -= 1;
 					self.allocate_address(physical_address, o)
 				} else {
@@ -118,7 +126,9 @@ impl HeapAllocator {
 
 					if higher_order <= MAX_ORDER {
 						// crate::println!("allocate_split in");
-						self.allocate_split(higher_order, o)
+						let a = self.allocate_split(higher_order, o);
+						// crate::println!("list: {:?}", self.free_counts);
+						a
 					} else {
 						// crate::println!("allocate_merge in higher_order: {}", higher_order);
 						self.allocate_merge(o)
