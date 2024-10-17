@@ -219,16 +219,20 @@ impl HeapAllocator {
 
 	/// ### Similar to size_to_order but ends at MAX_ORDER and returns
 	/// return value \
-	/// - usize: 0 > usize > max_order \
-	/// - -1: size < PAGE_SIZE
-	fn match_order(&self, max_order: usize, size: usize) -> i32 {
-		let mut order: i32 = -1;
+	/// - Some: 0 > usize > max_order \
+	/// - None: size < PAGE_SIZE
+	fn match_order(&self, size: usize) -> Option<usize> {
+		let mut order: usize = 0;
 		let mut block_size = PAGE_SIZE;
-		while block_size < size && order <= max_order as i32 {
-			block_size *= 2;
-			order += 1;
+		if block_size < size {
+			None
+		} else {
+			while block_size < size && order <= MAX_ORDER {
+				block_size *= 2;
+				order += 1;
+			}
+			Some(order)
 		}
-		order
 	}
 
 	#[allow(unused)]
@@ -237,7 +241,8 @@ impl HeapAllocator {
         let order = self.size_to_order(size);
         let mut physical_address = addr as usize;
 
-		// crate::println!("before list: {:?}", self.free_counts);
+		crate::println!("{:?}", layout);
+		crate::println!("before list: {:?}", self.free_counts);
 		match order {
 			Some(order) => {
 				// physical
@@ -257,32 +262,40 @@ impl HeapAllocator {
 				// condition: order > MAX_ORDER
 				// state    : non testable -> alloc more than MAX_ORDER causes page fault
 				//
-				let mut remain_size: usize = 0;
+				let mut remain_size: usize = size;
 				let mut dealloc_size: usize = 0;
-				let mut order: i32 = 0;
-				let mut o = size / PAGE_SIZE;
-				while order < 0 && remain_size == 0 {
-					remain_size = size - dealloc_size; // size % PAGE_SIZE
-					order = self.match_order(o, remain_size); // size / PAGE_SIZE
-					if order < 0 && remain_size == 0 {
-						crate::println!("deallocated successfully: no leaks");
-						break;
+				while remain_size != 0 {
+					match self.match_order(remain_size) {
+						Some(order) => {
+							// physical
+							// why indexing error? over 512
+							self.free_lists[order as usize][self.free_counts[order as usize] - 1] = physical_address;
+							self.free_counts[order as usize] += 1;
+							// virtual
+							let num_pages = 1 << order;
+							for i in 0..num_pages {
+								let virtual_addr = physical_address + i * PAGE_SIZE;
+								PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+								crate::println!("deallocated vm: 0x{:X}", virtual_addr);
+							}
+							dealloc_size = num_pages * PAGE_SIZE;
+							remain_size -= dealloc_size;
+							crate::println!("deallocation process: freed {}, left {}", dealloc_size, remain_size);
+						}
+						None => {
+							if remain_size == 0 {
+								crate::println!("deallocated successfully: no leaks ({})", remain_size);
+							} else {	
+								crate::println!("deallocated failed: possible leaks ({})", remain_size);
+							}
+							break;
+						}
 					}
-					// physical
-					// why indexing error? over 512
-					self.free_lists[order as usize][self.free_counts[order as usize] - 1] = physical_address;
-					self.free_counts[order as usize] += 1;
-					// virtual
-					let num_pages = 1 << order;
-					for i in 0..num_pages {
-						let virtual_addr = physical_address + i * PAGE_SIZE;
-						PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
-					}
-					dealloc_size = order as usize * PAGE_SIZE;
 				}
 				crate::println!("size: {}, addr: 0x{:X}", size, physical_address);
 			}
 		}
+		crate::println!("after list: {:?}", self.free_counts);
     }
 
 	// #[allow(clippy::manual_div_ceil)]
