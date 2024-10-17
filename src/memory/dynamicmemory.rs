@@ -3,7 +3,7 @@ use crate::memory::virtualmemory::PAGE_DIRECTORY;
 use core::alloc::{GlobalAlloc, Layout};
 use core::ptr::null_mut;
 
-const MAX_ORDER: usize = 11;
+const MAX_ORDER: usize = 10;
 const PAGE_SIZE: usize = 0x1000;
 const LIST_COUNT: usize = 128;
 
@@ -90,7 +90,7 @@ impl HeapAllocator {
 				frame += 1;
 			}
 		}
-		// crate::println!("list: {:?}", self.free_counts);
+		crate::println!("{} list: {:?}", if self.privilege == Privilege::User {"User"} else {"Kernel"}, self.free_counts);
 	}
 
 	fn size_to_order(&self, size: usize) -> Option<usize> {
@@ -231,44 +231,54 @@ impl HeapAllocator {
 	}
 
 	fn allocate_address(&mut self, physical_address: usize, order: usize) -> *mut u8 {
-		let virtual_address = self.next_virtual_addr;
-		let num_pages = 1 << order;
-		for i in 0..num_pages {
-			let cur_virtual_addr = virtual_address + (i * PAGE_SIZE);
-			let cur_physical_addr = physical_address + (i * PAGE_SIZE);
+        let virtual_address = self.next_virtual_addr;
+        let num_pages = 1 << order;
+        for i in 0..num_pages {
+            let cur_virtual_addr = virtual_address + (i * PAGE_SIZE);
+            let cur_physical_addr = physical_address + (i * PAGE_SIZE);
 
-			// crate::println!(
-			// 	"allocate : physical 0x{:x}, virtual 0x{:x}, pages {}/{}, order {}",
-			// 	cur_physical_addr,
-			// 	cur_virtual_addr,
-			// 	i + 1,
-			// 	num_pages,
-			// 	order
-			// );
+			// if i == 0 {
+            //     crate::println!(
+            //         "allocate : physical 0x{:x}, virtual 0x{:x}, pages {}/{}, order {}",
+            //         cur_physical_addr,
+            //         cur_virtual_addr,
+            //         i + 1,
+            //         num_pages,
+            //         order
+            //     );
+            // }
+            // crate::println!(
+            //     "allocate : physical 0x{:x}, virtual 0x{:x}, pages {}/{}, order {}",
+            //     cur_physical_addr,
+            //     cur_virtual_addr,
+            //     i + 1,
+            //     num_pages,
+            //     order
+            // );
 
-			BITMAP
-				.lock()
-				.alloc_frame_address(cur_physical_addr)
-				.unwrap();
-			if self.paging_status {
-				PAGE_DIRECTORY
-					.lock()
-					.map_page(
-						cur_virtual_addr,
-						cur_physical_addr,
-						if self.privilege == Privilege::Kernel {
-							0x3
-						} else {
-							0x7
-						},
-					)
-					.unwrap();
-			}
-		}
+            BITMAP
+                .lock()
+                .alloc_frame_address(cur_physical_addr)
+                .unwrap();
+            if self.paging_status {
+                PAGE_DIRECTORY
+                    .lock()
+                    .map_page(
+                        cur_virtual_addr,
+                        cur_physical_addr,
+                        if self.privilege == Privilege::Kernel {
+                            0x3
+                        } else {
+                            0x7
+                        },
+                    )
+                    .unwrap();
+            }
+        }
 
-		self.next_virtual_addr += num_pages * PAGE_SIZE;
-		virtual_address as *mut u8
-	}
+        self.next_virtual_addr += num_pages * PAGE_SIZE;
+        virtual_address as *mut u8
+    }
 
 	/// ### Similar to size_to_order but ends at MAX_ORDER and returns
 	/// return value \
@@ -277,12 +287,17 @@ impl HeapAllocator {
 	fn match_order(&self, size: usize) -> Option<usize> {
 		let mut order: usize = 0;
 		let mut block_size = PAGE_SIZE;
-		if block_size > size {
+
+		if block_size > size || size % PAGE_SIZE != 0 {
 			None
 		} else {
 			while block_size < size && order < MAX_ORDER {
 				block_size *= 2;
 				order += 1;
+			}
+			// crate::println!("{}, {} < {}, ", order, block_size, size);
+			if block_size > size {
+				order -= 1;
 			}
 			Some(order)
 		}
@@ -300,6 +315,7 @@ impl HeapAllocator {
 		match order {
 			Some(order) => {
 				// physical
+				// crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, virtual_address);
 				self.free_lists[order][self.free_counts[order]] = virtual_address;
 				self.free_counts[order] += 1;
 				// virtual
@@ -309,7 +325,6 @@ impl HeapAllocator {
 					let virtual_addr = virtual_address + i * PAGE_SIZE;
 					PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
 				}
-				// crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, virtual_address);
 			}
 			None => {
 				// crate::println!("Inside partial deallocate");
@@ -319,18 +334,26 @@ impl HeapAllocator {
 					// crate::println!("deallocate: inside loop: rs {}, ds {}, va 0x{:X}", remain_size, dealloc_size, virtual_address);
 					// crate::println!("list: {:?}", self.free_counts);
 					match self.match_order(remain_size) {
-						Some(order) => {
-							// crate::println!("deallocate: in some: order {}", order);
+						Some(mut order) => {
+							// crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, virtual_address);
+							// crate::println!("deallocate: in some: order {} rs {}", order, remain_size);
+							// crate::println!("order: {} free list: {:?} free count: {:?}", order, self.free_lists[order], self.free_counts);
 							// physical
-							self.free_lists[order as usize][self.free_counts[order as usize] - 1] = virtual_address;
-							self.free_counts[order as usize] += 1;
-							// virtual
-							let num_pages = 1 << order;
-							for i in 0..num_pages {
-								let virtual_addr = virtual_address + i * PAGE_SIZE;
-								PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+							while self.free_counts[order] == LIST_COUNT {
+								// assert!(order == 0, "deallocation: {:?}", self.free_counts);
+								order -= 1;
 							}
-							// crate::println!("deallocated va: 0x{:X}", virtual_address + num_pages * PAGE_SIZE);
+							self.free_lists[order][self.free_counts[order]] = virtual_address;
+							self.free_counts[order] += 1;
+							let num_pages = 1 << order;
+							// virtual
+							if self.paging_status {
+								for i in 0..num_pages {
+									let virtual_addr = virtual_address + i * PAGE_SIZE;
+									PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+								}
+								// crate::println!("deallocated va: 0x{:X}", virtual_address + num_pages * PAGE_SIZE);
+							}
 							virtual_address = virtual_address + num_pages * PAGE_SIZE;
 							dealloc_size = num_pages * PAGE_SIZE;
 							remain_size -= dealloc_size;
@@ -347,6 +370,7 @@ impl HeapAllocator {
 						}
 					}
 				}
+				crate::println!("partial deallocation leaks: ({})", remain_size);
 				// crate::println!("size: {}, addr: 0x{:X}", size, virtual_address);
 			}
 		}

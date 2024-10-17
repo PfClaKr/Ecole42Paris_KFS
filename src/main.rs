@@ -32,7 +32,7 @@ fn alloc_test() {
 	println!("{}, size: {}\n", b, b.len());
 
 	use alloc::vec;
-	let _b = vec![[0; 4096 * 600]];
+	let _b = vec![[0; 4096 * 1800]];
 }
 
 #[allow(unused)]
@@ -62,6 +62,6 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 		"System have to load by Multiboot2 boot loader."
 	);
 	init(multiboot_info, true);
-	welcome_message();
+	// welcome_message();
 	Shell::new().run();
 }
