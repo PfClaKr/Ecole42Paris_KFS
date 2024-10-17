@@ -55,21 +55,22 @@ struct GdtDescriptor {
 	base: u32,
 }
 
-pub unsafe fn load() {
-	use core::arch::asm;
-	use core::ptr;
+pub fn load() {
+	unsafe {
+		use core::arch::asm;
+		use core::ptr;
 
-	let gdt = Gdt::new();
+		let gdt = Gdt::new();
 
-	ptr::write_volatile(GDT_PTR, gdt);
+		ptr::write_volatile(GDT_PTR, gdt);
 
-	let gdtr = GdtDescriptor {
-		limit: (core::mem::size_of::<Gdt>() - 1) as u16,
-		base: GDT_PTR as u32,
-	};
+		let gdtr = GdtDescriptor {
+			limit: (core::mem::size_of::<Gdt>() - 1) as u16,
+			base: GDT_PTR as u32,
+		};
 
-	asm!(
-		"	lgdtl ({})
+		asm!(
+			"	lgdtl ({})
 			ljmp $0x08, $1f
 
 		1:
@@ -79,8 +80,9 @@ pub unsafe fn load() {
 			movw %ax, %fs
 			movw %ax, %gs
 			movw %ax, %ss",
-		in(reg) &gdtr as *const GdtDescriptor,
-		out("ax") _,
-		options(att_syntax)
-	);
+			in(reg) &gdtr as *const GdtDescriptor,
+			out("ax") _,
+			options(att_syntax)
+		);
+	}
 }

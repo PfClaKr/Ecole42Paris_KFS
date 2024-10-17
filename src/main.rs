@@ -32,15 +32,12 @@ fn alloc_test() {
 	println!("{}, size: {}\n", b, b.len());
 
 	use alloc::vec;
-	let _b = vec![[0; 4096 * 60]];
-	// loop {}
+	let _b = vec![[0; 4096 * 200]];
 }
 
 #[allow(unused)]
 fn init(multiboot_info: usize, paging_status: bool) {
-	unsafe {
-		include::gdt::load();
-	}
+	include::gdt::load();
 	memory::physicalmemory::init(multiboot_info);
 	memory::virtualmemory::init(multiboot_info, paging_status);
 	memory::dynamicmemory::USER_ALLOCATOR.lock().init(

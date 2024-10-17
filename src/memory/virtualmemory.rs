@@ -205,7 +205,10 @@ pub fn init(multiboot_info: usize, paging_status: bool) {
 			.map_page(multiboot_frame_add, multiboot_frame_add, 0x3)
 			.unwrap();
 	}
-	// PAGE_DIRECTORY.lock().map_page(0xC0000000, 0xC0000000, 0x3).unwrap();
+	// PAGE_DIRECTORY
+	// 	.lock()
+	// 	.map_page(0x800B_5000, 0x800B_5000, 0x3)
+	// 	.unwrap();
 	PAGE_DIRECTORY.lock().set_entry(1023, PDA, 0x3);
 	unsafe { asm!("invlpg [0]") };
 	enable(PDA);
