@@ -23,7 +23,7 @@ run:
 	$(QEMU) -m 3G -no-reboot -d int -display gtk,zoom-to-fit=on -cdrom $(ISO)
 
 debug-run:
-	$(QEMU) -s -S -cdrom $(ISO) -no-reboot -d int,cpu_reset
+	$(QEMU) -m 3G -s -S -cdrom $(ISO) -no-reboot -d int,cpu_reset
 #	gdb -x scripts/debug/debug.gdb target/i386-unknown-none/release/KFS
 
 clean:

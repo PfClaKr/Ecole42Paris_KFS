@@ -8,7 +8,7 @@ const PAGE_SIZE: usize = 0x1000;
 const LIST_COUNT: usize = 1000;
 const LIST_COUNT_INIT_MAX: usize = (LIST_COUNT / 10) * 3;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Privilege {
 	Kernel,
 	User,
@@ -48,14 +48,9 @@ impl HeapAllocator {
 		self.next_virtual_addr = start_addr;
 		self.paging_status = paging_status;
 
-		for i in (start_addr..=end_addr).step_by(4096) {
-			let pdi = i >> 22;
-			if !PAGE_DIRECTORY.lock().ref_dir()[pdi].is_present() {
-				let page_table_add = BITMAP.lock().alloc_frame().unwrap();
-				PAGE_DIRECTORY.lock().set_entry(pdi, page_table_add, 0x3);
-			}
+		if paging_status {
+			PAGE_DIRECTORY.lock().init_directory(start_addr, end_addr);
 		}
-
 		let mut frame = start_addr / PAGE_SIZE;
 		let end_frame = end_addr / PAGE_SIZE;
 		let mut index = 0;
@@ -141,7 +136,7 @@ impl HeapAllocator {
 		}
 	}
 
-	fn allocate(&mut self, layout: Layout) -> *mut u8 {
+	pub fn allocate(&mut self, layout: Layout) -> *mut u8 {
 		let size = layout.size().max(layout.align());
 		let order = self.size_to_order(size);
 		// crate::println!("alloc size : {}, order : {}", size, order.unwrap_or(1000));
@@ -169,6 +164,10 @@ impl HeapAllocator {
 			}
 			None => {
 				// crate::println!("allocate_large in size : {}", size);
+				assert!(
+					self.paging_status,
+					"Without paging, allocate max size is 4mb"
+				);
 				self.allocate_large(size)
 			}
 		}
@@ -308,10 +307,13 @@ impl HeapAllocator {
 		}
 
 		self.next_virtual_addr += num_pages * PAGE_SIZE;
-		virtual_address as *mut u8
+		if self.paging_status {
+			virtual_address as *mut u8
+		} else {
+			physical_address as *mut u8
+		}
 	}
 
-	#[allow(unused)]
 	pub fn deallocate(&mut self, addr: *mut u8, layout: Layout) {
 		let size = layout.size().max(layout.align());
 		let order = self.size_to_order(size);
@@ -331,13 +333,18 @@ impl HeapAllocator {
 				let num_pages = 1 << order;
 				for i in 0..num_pages {
 					let virtual_addr = virtual_address + i * PAGE_SIZE;
-					PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+					if self.paging_status {
+						PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+					} else {
+						BITMAP.lock().free_frame(virtual_addr).unwrap();
+					}
 				}
 			}
 			None => {
 				// crate::println!("Inside partial deallocate");
+				assert!(self.paging_status, "Without paging, kfree max size is 4mb");
 				let mut remain_size: usize = size;
-				let mut dealloc_size: usize = 0;
+				// let mut dealloc_size: usize = 0;
 				while remain_size != 0 {
 					// crate::println!("deallocate: inside loop: rs {}, ds {}, va 0x{:X}", remain_size, dealloc_size, virtual_address);
 					// crate::println!("list: {:?}", self.free_counts);
@@ -355,16 +362,14 @@ impl HeapAllocator {
 							self.free_counts[order] += 1;
 							let num_pages = 1 << order;
 							// virtual
-							if self.paging_status {
-								for i in 0..num_pages {
-									let virtual_addr = virtual_address + i * PAGE_SIZE;
-									PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
-								}
-								// crate::println!("deallocated va: 0x{:X}", virtual_address + num_pages * PAGE_SIZE);
+							for i in 0..num_pages {
+								let virtual_addr = virtual_address + i * PAGE_SIZE;
+								PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
 							}
+							// crate::println!("deallocated va: 0x{:X}", virtual_address + num_pages * PAGE_SIZE);
 							virtual_address += num_pages * PAGE_SIZE;
-							dealloc_size = num_pages * PAGE_SIZE;
-							remain_size -= dealloc_size;
+							// dealloc_size = num_pages * PAGE_SIZE;
+							remain_size -= num_pages * PAGE_SIZE;
 							// crate::println!("deallocation process: freed {}, left {}", dealloc_size, remain_size);
 						}
 						None => {
@@ -391,67 +396,102 @@ impl HeapAllocator {
 		// crate::println!("after list: {:?}", self.free_counts);
 	}
 
-	// #[allow(clippy::manual_div_ceil)]
-	// fn deallocate(&mut self, ptr: *mut u8, layout: Layout) {
-	// 	let size = layout.size().max(layout.align()).max(PAGE_SIZE);
-	// 	let order = self.size_to_order(size);
+	pub fn print_free_list(&self) {
+		crate::println!(
+			"{}, count: {:?}",
+			if self.privilege == Privilege::User {
+				"User"
+			} else {
+				"Kernel"
+			},
+			self.free_counts
+		);
+	}
+	/// ## kallocate
+	/// alloc contiguous physical memory with request size. \
+	/// return raw address of start of memory.\
+	/// ## Warning
+	/// It's your reponsibility of free the memory, if not you may have memory leak.
+	/// ## Example
+	/// ```
+	/// let ptr = unsafe { Allocator::kallocate(size) };
+	/// if !ptr.is_null() {
+	///     unsafe {
+	///         *ptr = 42;
+	///         println!("the value of ptr: {}", *ptr);
+	///         Allocator::kdeallocate(ptr, size);
+	///     }
+	/// }
+	/// ```
+	pub unsafe fn kallocate(&mut self, size: usize) -> *mut u8 {
+		assert_eq!(
+			self.privilege,
+			Privilege::Kernel,
+			"User allocator can not allocate kernel space"
+		);
+		let size = (size + 4095) & !4095;
+		let order = self.size_to_order(size);
+		// crate::println!("size = {}, order = {}", size, order.unwrap());
 
-	// 	// crate::println!("dealloc size : {}, order : {}", size, order.unwrap());
-	// 	match order {
-	// 		Some(o) => self.deallocate_order(ptr as usize, o),
-	// 		_ => {
-	// 			let num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	// 			self.deallocate_large(ptr as usize, num_pages * PAGE_SIZE);
-	// 		}
-	// 	}
-	// }
+		match order {
+			Some(o) => {
+				if self.free_counts[o] > 0 {
+					let physical_address = self.free_lists[o][self.free_counts[o] - 1];
+					self.free_counts[o] -= 1;
+					self.allocate_address(physical_address, o)
+				} else {
+					let mut higher_order = o + 1;
+					while higher_order <= MAX_ORDER && self.free_counts[higher_order] == 0 {
+						higher_order += 1;
+					}
 
-	// fn deallocate_order(&mut self, addr: usize, mut order: usize) {
-	// 	let num_pages = 1 << order;
-	// 	// crate::println!(
-	// 	// 	"deallocate addr : 0x{:x}, num_pages : {}, order : {}, virtual addr : 0x{:x}",
-	// 	// 	addr,
-	// 	// 	num_pages,
-	// 	// 	order,
-	// 	// 	addr * PAGE_SIZE
-	// 	// );
-	// 	for i in 0..num_pages {
-	// 		let cur_virtual_addr = addr + i * PAGE_SIZE;
-	// 		// BITMAP.lock().free_frame(cur_virtual_addr).unwrap();
-	// 		PAGE_DIRECTORY.lock().unmap_page(cur_virtual_addr).unwrap();
-	// 	}
+					if higher_order <= MAX_ORDER {
+						self.allocate_split(higher_order, o)
+					} else {
+						// can not sure contiguous physical memory
+						null_mut()
+					}
+				}
+			}
+			None => {
+				// can not allocate several memory block
+				null_mut()
+			}
+		}
+	}
 
-	// 	let mut current_addr = addr;
-	// 	while order < MAX_ORDER {
-	// 		let buddy = current_addr ^ (1 << (order + 12));
-	// 		let buddy_index = self.free_lists[order][..self.free_counts[order]]
-	// 			.iter()
-	// 			.position(|&block| block == buddy);
+	pub unsafe fn kdeallocate(&mut self, ptr: *mut u8, size: usize) {
+		assert_eq!(
+			self.privilege,
+			Privilege::Kernel,
+			"User allocator can not deallocate kernel space"
+		);
+		let ptr = ptr as usize;
+		let size = (size + 4095) & !4095;
+		let order = self.size_to_order(size);
 
-	// 		if let Some(index) = buddy_index {
-	// 			self.free_counts[order] -= 1;
-	// 			self.free_lists[order][index] = self.free_lists[order][self.free_counts[order]];
-	// 			current_addr = current_addr.min(buddy);
-	// 			order += 1;
-	// 		} else {
-	// 			break;
-	// 		}
-	// 	}
-	// 	if self.free_counts[order] < LIST_COUNT {
-	// 		self.free_lists[order][self.free_counts[order]] = current_addr;
-	// 		self.free_counts[order] += 1;
-	// 	}
-	// }
-
-	// #[allow(clippy::manual_div_ceil)]
-	// fn deallocate_large(&mut self, ptr: usize, size: usize) {
-	// 	let num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	// 	for i in 0..num_pages {
-	// 		let page_addr = ptr + i * PAGE_SIZE;
-	// 		let order = self.size_to_order(PAGE_SIZE).unwrap();
-	// 		self.deallocate_order(page_addr, order);
-	// 	}
-	// }
+		match order {
+			Some(order) => {
+				self.free_lists[order][self.free_counts[order]] = ptr;
+				self.free_counts[order] += 1;
+				let num_pages = 1 << order;
+				for i in 0..num_pages {
+					let virtual_addr = ptr + i * PAGE_SIZE;
+					if self.paging_status {
+						PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
+					} else {
+						BITMAP.lock().free_frame(virtual_addr).unwrap();
+					}
+				}
+			}
+			None => {
+				assert!(
+					size > 0x400000,
+					"kdeallocate size value error. can not excced 4mb"
+				)
+			}
+		}
+	}
 }
 
 pub struct Locked<A> {
@@ -471,7 +511,7 @@ impl<A> Locked<A> {
 }
 
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::new());
+pub static KERNEL_ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::new());
 
 pub static USER_ALLOCATOR: Locked<HeapAllocator> = Locked::new(HeapAllocator::new());
 

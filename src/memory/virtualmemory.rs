@@ -42,12 +42,14 @@ impl PageTable {
 	}
 
 	fn set_entry(&mut self, index: usize, address: usize, flags: usize) {
-		// crate::println!(
-		// 	"set_entry table: index : {}, address : 0x{:x}, flags : {}",
-		// 	index,
-		// 	address,
-		// 	flags
-		// );
+		// 	if index % 10 == 0 {
+		// 	crate::println!(
+		// 		"set_entry table: index : {}, address : 0x{:x}, flags : {}",
+		// 		index,
+		// 		address,
+		// 		flags
+		// 	);
+		// }
 		self.mut_table()[index] = PageTableEntry::new(address, flags)
 	}
 }
@@ -85,7 +87,7 @@ impl PageDirectory {
 
 	pub fn clear(&mut self) {
 		for i in 0..self.ref_dir().len() {
-			self.mut_dir()[i] = PageDirectoryEntry::new(0, 0x2);
+			self.mut_dir()[i] = PageDirectoryEntry::new(0, 0);
 		}
 	}
 
@@ -120,6 +122,8 @@ impl PageDirectory {
 
 		assert!(pdi != 1023, "over 0xFFC00000 is reserved");
 
+		// crate::println!("map_page virtual_address: 0x{:x}", virtual_address);
+
 		let mut page_table: PageTable;
 		let page_table_add: usize;
 		if !self.ref_dir()[pdi].is_present() {
@@ -134,8 +138,9 @@ impl PageDirectory {
 		}
 		assert!(
 			!page_table.ref_table()[pti].is_present(),
-			"page entry already present. address: {:x}",
-			virtual_address
+			"page entry already present. address: 0x{:x}, pti: {}",
+			virtual_address,
+			pti
 		);
 		page_table.set_entry(pti, physical_address, flags);
 		Ok(())
@@ -145,22 +150,41 @@ impl PageDirectory {
 		let pdi = (virtual_address >> 22) & 0x3FF;
 		let pti = (virtual_address >> 12) & 0x3FF;
 
+		// crate::println!("unmap_page virtual_address: 0x{:x}", virtual_address);
 		assert!(
 			self.ref_dir()[pdi].is_present(),
-			"Directory entry not preset."
+			"Directory entry not preset. virtual address: 0x{:x}",
+			virtual_address
 		);
 
 		let mut page_table =
 			unsafe { PageTable(NonNull::new_unchecked(self.table_address_add(pdi) as *mut _)) };
 		assert!(
 			page_table.ref_table()[pti].is_present(),
-			"page entry not present."
+			"page entry not present. virtual address: 0x{:x}, pti: {}",
+			virtual_address,
+			pti
 		);
 		BITMAP
 			.lock()
 			.free_frame(page_table.ref_table()[pti].page_frame_address())?;
 		page_table.set_entry(pti, 0x0, 0x0);
 		Ok(())
+	}
+
+	pub fn init_directory(&mut self, start_addr: usize, end_addr: usize) {
+		let mut page_table: PageTable;
+		for i in (start_addr..=end_addr).step_by(4096) {
+			let pdi = i >> 22;
+			if !self.ref_dir()[pdi].is_present() {
+				let page_table_add = BITMAP.lock().alloc_frame().unwrap();
+				self.set_entry(pdi, page_table_add, 0x3);
+				page_table = unsafe {
+					PageTable(NonNull::new_unchecked(self.table_address_add(pdi) as *mut _))
+				};
+				page_table.clear();
+			}
+		}
 	}
 }
 

@@ -157,19 +157,14 @@ pub fn init(multiboot_info: usize) {
 
 		let mut kernel_start = symbols::get_kernel_start() as usize & !0xFFF;
 		let kernel_end = symbols::get_kernel_end() as usize & !0xFFF;
+		// crate::println!("kernel alloc: 0x{:x}, 0x{:x}",kernel_start,  kernel_end);
 		while kernel_start <= kernel_end {
 			BITMAP.lock().alloc_frame_address(kernel_start).unwrap();
 			kernel_start += 0x1000;
 		}
-		// crate::println!("kernel alloc: 0x{:x}, 0x{:x}",kernel_start,  kernel_end);
 
-		let mut mapping_start = PDA;
-		let mapping_end = PDA + 0x1000;
-		while mapping_start <= mapping_end {
-			BITMAP.lock().alloc_frame_address(mapping_start).unwrap();
-			mapping_start += 0x1000;
-		}
-		// crate::println!("map alloc: 0x{:x}, 0x{:x}", mapping_start, mapping_end);
+		let mapping_start = PDA;
+		BITMAP.lock().alloc_frame_address(mapping_start).unwrap();
 
 		let multiboot_info_address = multiboot_info & !0xFFF;
 		if BITMAP.lock().is_address_free(multiboot_info_address) {

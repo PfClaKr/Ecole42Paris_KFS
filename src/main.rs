@@ -23,37 +23,24 @@ fn welcome_message() {
 	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
 }
 
-fn alloc_test() {
-	let mut a = alloc::string::String::new();
-	a.push_str("Hello im yugeon");
-	println!("{}, size: {}", a, a.len());
-	let mut b = alloc::string::String::new();
-	b.push_str("Hello im yugeon");
-	println!("{}, size: {}", b, b.len());
-
-	use alloc::vec;
-	let _b = vec![[0; 4096 * 5000]];
-	println!("vec size : {}", _b.len());
-}
-
 #[allow(unused)]
 fn init(multiboot_info: usize, paging_status: bool) {
 	include::gdt::load();
 	memory::physicalmemory::init(multiboot_info);
 	memory::virtualmemory::init(multiboot_info, paging_status);
 	memory::dynamicmemory::USER_ALLOCATOR.lock().init(
-		0x100000,
+		0xF00000,
 		0x800B_5000,
 		Privilege::User,
 		paging_status,
 	);
-	memory::dynamicmemory::GLOBAL_ALLOCATOR.lock().init(
+	memory::dynamicmemory::KERNEL_ALLOCATOR.lock().init(
 		0x800B_6000,
 		0xBFFE_0000,
 		Privilege::Kernel,
 		paging_status,
 	);
-	alloc_test();
+	memory::heap_test::alloc_test(paging_status);
 }
 
 #[no_mangle]
