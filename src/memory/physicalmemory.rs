@@ -83,7 +83,7 @@ impl PhysicalMemory {
 	pub fn is_address_free(&self, address: usize) -> bool {
 		assert!(address % 0x1000 == 0, "Address is not 4KB aligned");
 		let index = address / 0x1000 / 0x20;
-		let offset = address / 0x1000 / 0x20;
+		let offset = address / 0x1000 % 0x20;
 
 		(self.bitmap[index] & (1 << (31 - offset))) == 0
 	}

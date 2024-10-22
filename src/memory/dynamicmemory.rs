@@ -176,47 +176,66 @@ impl HeapAllocator {
 	fn allocate_large(&mut self, size: usize) -> *mut u8 {
 		let mut remaining_size = size as i64;
 		let mut base_addr: *mut u8 = null_mut();
+		let mut ret;
 
 		while remaining_size > 0 {
-			let order = self.match_order(remaining_size as usize).unwrap();
-			let block_size = (1 << order) * PAGE_SIZE as i64;
+			let o = self.match_order(remaining_size as usize).unwrap();
+			let block_size = (1 << o) * PAGE_SIZE as i64;
 			// crate::println!(
 			// 	"alloc large remaining_size : {}, block_size {}, order {}",
 			// 	remaining_size,
 			// 	block_size,
-			// 	order
+			// 	o
 			// );
-			if self.free_counts[order] > 0 {
-				let physical_address = self.free_lists[order][self.free_counts[order] - 1];
-				self.free_counts[order] -= 1;
-				if base_addr.is_null() {
-					base_addr = self.allocate_address(physical_address, order);
-				} else {
-					self.allocate_address(physical_address, order);
-				}
-				remaining_size -= block_size;
+			if self.free_counts[o] > 0 {
+				let physical_address = self.free_lists[o][self.free_counts[o] - 1];
+				self.free_counts[o] -= 1;
+				ret = self.allocate_address(physical_address, o);
 			} else {
-				return null_mut();
-			}
-		}
+				let mut higher_order = o + 1;
+				while higher_order <= MAX_ORDER && self.free_counts[higher_order] == 0 {
+					higher_order += 1;
+				}
 
+				if higher_order <= MAX_ORDER {
+					// crate::println!("large allocate_split in");
+					ret = self.allocate_split(higher_order, o);
+				} else {
+					// crate::println!("allocate_merge in higher_order: {}", higher_order);
+					ret = self.allocate_merge(o);
+				}
+			}
+			if base_addr.is_null() {
+				// crate::println!("large ret in : 0x{:x}", ret as usize);
+				base_addr = ret;
+			}
+			remaining_size -= block_size;
+		}
 		base_addr
 	}
 
 	fn allocate_split(&mut self, higher_order: usize, target_order: usize) -> *mut u8 {
 		let physical_address = self.free_lists[higher_order][self.free_counts[higher_order] - 1];
+		let current_address = physical_address;
 		self.free_counts[higher_order] -= 1;
 
 		let mut current_order = higher_order;
 		while current_order > target_order {
 			current_order -= 1;
-			let buddy = physical_address ^ (1 << (current_order + 12));
+			let buddy = current_address + (1 << (current_order + 12));
+			// crate::println!(
+			// 	"buddy: 0x{:x}, phy addr: 0x{:x}, co:{}, ho:{}, to:{}",
+			// 	buddy,
+			// 	physical_address,
+			// 	current_order,
+			// 	higher_order,
+			// 	target_order
+			// );
 			if self.free_counts[current_order] < LIST_COUNT {
 				self.free_lists[current_order][self.free_counts[current_order]] = buddy;
 				self.free_counts[current_order] += 1;
 			}
 		}
-
 		self.allocate_address(physical_address, target_order)
 	}
 
