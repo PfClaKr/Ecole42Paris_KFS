@@ -1,6 +1,6 @@
 use crate::include::panic::panic;
 use crate::kernel_main;
-use core::arch::asm;
+use core::arch::naked_asm;
 
 #[repr(C)]
 struct MultibootHeader {
@@ -58,7 +58,7 @@ static mut STACK: [u8; 4096] = [0; 4096];
 #[no_mangle]
 pub extern "C" fn start() -> ! {
 	unsafe {
-		asm!(
+		naked_asm!(
 			// "mov esp, {stack_end}",
 			"lea esp, [STACK + 4096]",
 			"xor ebp, ebp",
