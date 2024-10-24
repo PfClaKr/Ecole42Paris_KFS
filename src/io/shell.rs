@@ -5,6 +5,7 @@ use crate::memory::physicalmemory::BITMAP;
 use crate::{print, println};
 
 const INPUT_SIZE: usize = 77;
+const TAB_SIZE: usize = 4;
 
 pub struct Shell {
 	prompt: &'static str,
@@ -78,9 +79,8 @@ User experience :
 
 	fn bitmap(&mut self, all_flag: bool) {
 		let mut line_count = 0;
-		let bitmap = BITMAP.lock().bitmap;
 
-		for (i, entry) in bitmap.iter().enumerate() {
+		for (i, entry) in BITMAP.lock().bitmap.iter().enumerate() {
 			if all_flag {
 				println!("Entry {}: {:032b}", i, entry);
 				line_count += 1;
@@ -193,6 +193,9 @@ User experience :
 							input[*len] = b'\0';
 							print!("{}", '\x7f');
 						}
+					}
+					'\x09' => {
+						print!("{}", " ".repeat(TAB_SIZE));
 					}
 					'\x01' => {
 						self.switch_shell(1, input, len);

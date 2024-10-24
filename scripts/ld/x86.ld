@@ -22,7 +22,15 @@ SECTIONS {
     } : text
     .rodata ALIGN(4K) : { *(.rodata*) } : rodata
     .data ALIGN(4K) : { *(.data*) } : data
-    .bss ALIGN(4K) : { *(.bss*) } : data
+    .bss ALIGN(4K) : {
+        *(COMMON)
+        *(.bss*)
+    } : data
+
+   .stack : ALIGN(4K)
+    {
+        *(.stack)
+    } : data
+
     kernel_end = .;
-    first_page = ALIGN(0x1000);
 }
