@@ -251,29 +251,9 @@ impl HeapAllocator {
 				// 	current_order,
 				// 	required_blocks
 				// );
-				if self.free_counts[current_order] >= required_blocks {
-					let base_addr =
-						self.free_lists[current_order][self.free_counts[current_order] - 1];
-					self.free_counts[current_order] -= 1;
-					self.allocate_address(base_addr, current_order);
-				}
-				//maybe will be implement merge block for contiguous physical address
-				// for _ in 1..required_blocks {
-				// 	let buddy = base_addr ^ (1 << (current_order + 12));
-				// 	if let Some(index) = self.free_lists[current_order]
-				// 		[..self.free_counts[current_order]]
-				// 		.iter()
-				// 		.position(|&x| x == buddy)
-				// 	{
-				// 		self.free_lists[current_order]
-				// 			.swap(index, self.free_counts[current_order] - 1);
-				// 		self.free_counts[current_order] -= 1;
-				// 	} else {
-				// 		return null_mut();
-				// 	}
-				// 	base_addr = base_addr.min(buddy);
-				// }
-				// return self.allocate_address(base_addr, 1 << target_order);
+				let base_addr = self.free_lists[current_order][self.free_counts[current_order] - 1];
+				self.free_counts[current_order] -= 1;
+				self.allocate_address(base_addr, current_order);
 			}
 		}
 		null_mut()
@@ -349,6 +329,7 @@ impl HeapAllocator {
 				// if paging == true
 				let num_pages = 1 << order;
 				if self.paging_status {
+					self.next_virtual_addr -= num_pages * PAGE_SIZE;
 					let physical_address = PAGE_DIRECTORY.lock().translate(virtual_address);
 					self.free_lists[order][self.free_counts[order]] = physical_address;
 					self.free_counts[order] += 1;
@@ -386,6 +367,7 @@ impl HeapAllocator {
 							self.free_counts[order] += 1;
 							// virtual
 							for i in 0..num_pages {
+								self.next_virtual_addr -= num_pages * PAGE_SIZE;
 								let virtual_addr = virtual_address + i * PAGE_SIZE;
 								PAGE_DIRECTORY.lock().unmap_page(virtual_addr).unwrap();
 							}

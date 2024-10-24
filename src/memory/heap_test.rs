@@ -142,7 +142,6 @@ fn vec_alloc_test(paging_status: bool) {
 pub fn alloc_test(paging_status: bool) {
 	simple_str_test();
 	vec_alloc_test(paging_status);
-	// vec_alloc_test(paging_status);
 	user_alloc_test(paging_status);
 	kalloc_test();
 }
