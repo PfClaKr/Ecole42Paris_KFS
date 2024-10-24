@@ -29,14 +29,14 @@ fn init(multiboot_info: usize, paging_status: bool) {
 	memory::physicalmemory::init(multiboot_info);
 	memory::virtualmemory::init(multiboot_info, paging_status);
 	memory::dynamicmemory::USER_ALLOCATOR.lock().init(
-		0xF00000,
-		0x800B_5000,
+		0x300000,
+		0x800B_5000, // ≒ 2GB
 		Privilege::User,
 		paging_status,
 	);
 	memory::dynamicmemory::KERNEL_ALLOCATOR.lock().init(
 		0x800B_6000,
-		0xBFFE_0000,
+		0xBFFE_0000, // ≒ 1GB
 		Privilege::Kernel,
 		paging_status,
 	);

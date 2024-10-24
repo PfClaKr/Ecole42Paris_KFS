@@ -172,6 +172,28 @@ impl PageDirectory {
 		Ok(())
 	}
 
+	pub fn translate(&mut self, virtual_address: usize) -> usize {
+		let pdi = (virtual_address >> 22) & 0x3FF;
+		let pti = (virtual_address >> 12) & 0x3FF;
+
+		assert!(
+			self.ref_dir()[pdi].is_present(),
+			"Directory entry not preset. virtual address: 0x{:x}",
+			virtual_address
+		);
+
+		let page_table =
+			unsafe { PageTable(NonNull::new_unchecked(self.table_address_add(pdi) as *mut _)) };
+		assert!(
+			page_table.ref_table()[pti].is_present(),
+			"page entry not present. virtual address: 0x{:x}, pti: {}",
+			virtual_address,
+			pti
+		);
+		let physical_address = page_table.ref_table()[pti].page_frame_address();
+		physical_address
+	}
+
 	pub fn init_directory(&mut self, start_addr: usize, end_addr: usize) {
 		let mut page_table: PageTable;
 		for i in (start_addr..=end_addr).step_by(4096) {

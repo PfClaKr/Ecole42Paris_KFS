@@ -15,6 +15,8 @@ fn simple_str_test() {
 		let mut a = alloc::string::String::new();
 		a.push_str("Hello It's 42 project, kfs3");
 		println!("str result: {}, size: {}", a, a.len());
+		let mut b = alloc::string::String::new();
+		b.push_str("Hello It's 42 project, kfs3");
 		KERNEL_ALLOCATOR.lock().print_free_list();
 	}
 	println!("***************out of block, all drop***************");
@@ -115,8 +117,6 @@ fn vec_alloc_test(paging_status: bool) {
 	println!("----------vec alloc test------------");
 	{
 		KERNEL_ALLOCATOR.lock().print_free_list();
-	}
-	{
 		let vec1: vec::Vec<u8> = vec![0; 4 * 1024]; // 4KB
 		let vec2: vec::Vec<u8> = vec![0; 8 * 1024]; // 8KB
 		let vec3: vec::Vec<u8> = vec![0; 16 * 1024]; // 16KB
@@ -125,11 +125,10 @@ fn vec_alloc_test(paging_status: bool) {
 		let vec6: vec::Vec<u8> = vec![0; 128 * 1024]; // 128KB
 		let vec7: vec::Vec<u8> = vec![0; 1024 * 1024]; // 1MB
 		if paging_status {
-			let vec8 = vec![0; 10 * 1024 * 1024]; // 10MB
-			let vec9 = vec![0; 100 * 1024 * 1024]; // 100MB
-		}
-		println!("----------after allocation------------");
-		{
+			let vec8: vec::Vec<u8> = vec![0; 10 * 1024 * 1024]; // 10MB
+			let vec9: vec::Vec<u8> = vec![0; 100 * 1024 * 1024]; // 100MB
+			let vec10: vec::Vec<u8> = vec![0; 500 * 1024 * 1024]; // 500MB
+			println!("----------after allocation------------");
 			KERNEL_ALLOCATOR.lock().print_free_list();
 		}
 	}
@@ -143,6 +142,7 @@ fn vec_alloc_test(paging_status: bool) {
 pub fn alloc_test(paging_status: bool) {
 	simple_str_test();
 	vec_alloc_test(paging_status);
+	// vec_alloc_test(paging_status);
 	user_alloc_test(paging_status);
 	kalloc_test();
 }

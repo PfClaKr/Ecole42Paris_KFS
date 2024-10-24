@@ -345,11 +345,14 @@ impl HeapAllocator {
 			Some(order) => {
 				// physical
 				// crate::println!("deallocate: size {}, order {}, pa 0x{:X}", size, order, virtual_address);
-				self.free_lists[order][self.free_counts[order]] = virtual_address;
-				self.free_counts[order] += 1;
 				// virtual
 				// if paging == true
 				let num_pages = 1 << order;
+				if self.paging_status {
+					let physical_address = PAGE_DIRECTORY.lock().translate(virtual_address);
+					self.free_lists[order][self.free_counts[order]] = physical_address;
+					self.free_counts[order] += 1;
+				}
 				for i in 0..num_pages {
 					let virtual_addr = virtual_address + i * PAGE_SIZE;
 					if self.paging_status {
@@ -377,9 +380,10 @@ impl HeapAllocator {
 								// assert!(order == 0, "deallocation: {:?}", self.free_counts);
 								order -= 1;
 							}
-							self.free_lists[order][self.free_counts[order]] = virtual_address;
-							self.free_counts[order] += 1;
 							let num_pages = 1 << order;
+							let physical_address = PAGE_DIRECTORY.lock().translate(virtual_address);
+							self.free_lists[order][self.free_counts[order]] = physical_address;
+							self.free_counts[order] += 1;
 							// virtual
 							for i in 0..num_pages {
 								let virtual_addr = virtual_address + i * PAGE_SIZE;
