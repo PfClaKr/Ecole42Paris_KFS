@@ -11,6 +11,7 @@ mod memory;
 use io::shell::Shell;
 use memory::dynamicmemory::Privilege;
 
+#[allow(unconditional_panic)]
 fn welcome_message() {
 	println!("\x1b[5;m   ___  _____     ");
 	println!("\x1b[9;m  /   |/ __  \\   ");
@@ -21,11 +22,15 @@ fn welcome_message() {
 
 	println!("\x1b[15;mKnife Fork Spoon");
 	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
+	// println!("12 / 0 : {}", 12 / 0);
 }
 
 #[allow(unused)]
 fn init(multiboot_info: usize, paging_status: bool) {
 	include::gdt::load();
+	unsafe {
+		include::idt::load();
+	}
 	memory::physicalmemory::init(multiboot_info);
 	memory::virtualmemory::init(multiboot_info, paging_status);
 	memory::dynamicmemory::USER_ALLOCATOR.lock().init(
@@ -40,7 +45,7 @@ fn init(multiboot_info: usize, paging_status: bool) {
 		Privilege::Kernel,
 		paging_status,
 	);
-	memory::heap_test::alloc_test(paging_status);
+	// memory::heap_test::alloc_test(paging_status);
 }
 
 #[no_mangle]
