@@ -80,7 +80,6 @@ pub extern "C" fn start() -> ! {
 			kernel_main = sym kernel_main,
 			panic = sym panic,
 			// stack_end = sym symbols::get_stack_end,
-			options(noreturn)
 		);
 	}
 }
