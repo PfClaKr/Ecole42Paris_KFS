@@ -78,7 +78,6 @@ macro_rules! handler {
 					"sti",
 					"iretd",
 					sym $isr,
-					options(noreturn),
 				);
 			}
 		}
