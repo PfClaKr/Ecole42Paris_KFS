@@ -1,6 +1,5 @@
 use core::{arch::{asm, naked_asm}, ptr};
 
-use crate::memory::virtualmemory::PAGE_DIRECTORY;
 
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
@@ -60,6 +59,8 @@ macro_rules! handler {
 		extern "C" fn wrapper() {
 			unsafe {
 				naked_asm!(
+					// disable interrupt
+					"cli",
 					// Set up stack frame
 					"push ebp",
 					"mov ebp, esp",
@@ -73,8 +74,11 @@ macro_rules! handler {
 					"popad",
 					// Restore base pointer and return from interrupt
 					"pop ebp",
+					// enable interrupt
+					"sti",
 					"iretd",
 					sym $isr,
+					options(noreturn),
 				);
 			}
 		}
@@ -135,14 +139,13 @@ pub unsafe fn load() {
 	IDT.entries[0x00] = IdtEntry::new(DIV_BY_ZERO as u32, 0x08, 0x8E);
 	IDT.entries[0x0D] = IdtEntry::new(GENERAL_PROTECTION_FAULT as u32, 0x08, 0x8E);
 	IDT.entries[0x0E] = IdtEntry::new(PAGE_FAULT as u32, 0x08, 0x8E);
-	// ptr::write_volatile(IDT_PTR, idt);
 	
 	let idtr = IdtPtr {
 		limit: (core::mem::size_of::<Idt>() - 1) as u16,
 		base: &raw const IDT as *const _ as u32,
 	};
 	asm!("lidt [{}]", in(reg) &idtr as *const IdtPtr, options(nostack, preserves_flags, readonly));
-	// crate::println!("IDT loaded at 0x{:08x}", IDT_PTR as u32);
+	crate::println!("IDT loaded at 0x{:08x}", &raw const IDT as *const _ as u32);
 	
 	{
 		let mut idtr = IdtPtr { limit: 0, base: 0 };
@@ -151,7 +154,7 @@ pub unsafe fn load() {
 		let limit = idtr.limit;
 		crate::println!("IDT base: 0x{:08x}, limit: {}", base, limit);
 	}
-	// asm!("cli");
+	
 	asm!("sti");
 }
 
@@ -174,7 +177,6 @@ pub extern "C" fn div_by_zero(frame: &IntStackFrame, error_code: u32) {
     crate::println!("division by zero");
 	crate::println!("error code: 0x{:X}", error_code);
     crate::println!("eip: 0x{:08x}", eip);
-	loop {}
 }
 
 #[no_mangle]
@@ -183,7 +185,6 @@ pub extern "C" fn general_protection_fault(frame: &IntStackFrame, error_code: u3
 	crate::println!("general protection fault");
 	crate::println!("error code: 0x{:X}", error_code);
     crate::println!("eip: 0x{:08x}", eip);
-	loop {}
 }
 
 #[no_mangle]
@@ -192,6 +193,5 @@ pub extern "C" fn page_fault(frame: &IntStackFrame, error_code: u32) {
 	crate::println!("page fault");
 	crate::println!("error code: 0x{:X}", error_code);
     crate::println!("eip: 0x{:08x}", eip);
-	loop {}
 }
 
