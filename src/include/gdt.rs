@@ -84,5 +84,16 @@ pub fn load() {
 			out("ax") _,
 			options(att_syntax)
 		);
+
+		// {
+		// 	let mut gdtr = GdtDescriptor {
+		// 		limit: 0,
+		// 		base: 0,
+		// 	};
+		// 	asm!("sgdt [{}]", in(reg) &mut gdtr as *mut GdtDescriptor);
+		// 	let limit = gdtr.limit;
+		// 	let base = gdtr.base;
+		// 	crate::println!("GDT: limit: {} base: 0x{:08x}", limit, base);
+		// }
 	}
 }

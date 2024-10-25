@@ -22,7 +22,7 @@ fn welcome_message() {
 
 	println!("\x1b[15;mKnife Fork Spoon");
 	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
-	// println!("12 / 0 : {}", 12 / 0);
+	println!("12 / 0 : {}", 12 / 0);
 }
 
 #[allow(unused)]
