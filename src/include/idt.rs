@@ -1,5 +1,33 @@
-use core::{arch::{asm, naked_asm}, ptr};
+#[allow(unused_imports)]
+use crate::include::interrupts::{
+	ALIGNMENT_CHECK, BOUND_RANGE_EXCEED, BREAKPOINT, CONTROL_PROTECTION_EXCEPTION,
+	COPROC_NOT_AVAIL, COPROC_SEGMENT_OVERRUN, DEFAULT, DIV_BY_ZERO, DOUBLE_FAULT,
+	FLOATING_POINT_EXCEPTION, GENERAL_PROTECTION_FAULT, INV_OPCODE, INV_TSS, MACHINE_CHECK, NMI,
+	OVERFLOW, PAGE_FAULT, RESERVED, SEGMENT_NOT_PRESENT, SINGLE_STEP_INT, STACK_SEGMENT_FAULT,
+	SYSCALL, TIMER_INTERRUPT, VIRTUALIZATION_EXCEPTION,
+};
 
+use core::arch::asm;
+
+const ENTRY_COUNT: usize = 256;
+
+#[repr(C, packed)]
+struct Idt {
+	entries: [IdtEntry; ENTRY_COUNT],
+}
+
+#[allow(unused)]
+impl Idt {
+	fn new() -> Idt {
+		Idt {
+			entries: [IdtEntry::new(0, 0, 0); ENTRY_COUNT],
+		}
+	}
+
+	fn set_entry(&mut self, index: usize, isr: usize, kernel_cs: u16, attributes: u8) {
+		self.entries[index] = IdtEntry::new(isr, kernel_cs, attributes);
+	}
+}
 
 #[repr(C, packed)]
 #[derive(Clone, Copy)]
@@ -13,184 +41,80 @@ struct IdtEntry {
 
 #[allow(unused)]
 impl IdtEntry {
-	const fn new(isr: u32, kernel_cs: u16, attr: u8) -> IdtEntry {
+	const fn new(isr: usize, kernel_cs: u16, attr: u8) -> IdtEntry {
 		IdtEntry {
 			isr_low: (isr & 0x0000FFFF) as u16,
 			kernel_cs,
 			reserved: 0,
 			attributes: attr,
-			isr_high: ((isr >> 16) & 0xFFFF0000) as u16,
+			isr_high: ((isr & 0xFFFF0000) >> 16) as u16,
 		}
 	}
 }
-
-#[repr(C, packed)]
-struct Idt {
-	entries: [IdtEntry; 256],
-}
-
-#[allow(unused)]
-impl Idt {
-	fn new() -> Idt {
-		Idt {
-			entries: [IdtEntry::new(0, 0, 0); 256],
-		}
-	}
-
-	fn set_entry(&mut self, index: usize, isr: u32, kernel_cs: u16, attributes: u8) {
-		self.entries[index] = IdtEntry::new(isr, kernel_cs, attributes);
-	}
-}
-
-// static mut IDT_PTR: *mut Idt = 0x0004000 as *mut Idt;
-static mut IDT: Idt = Idt { entries: [IdtEntry::new(0, 0, 0); 256] };
 
 #[allow(unused)]
 #[repr(C, packed)]
 struct IdtPtr {
 	limit: u16,
-	base: u32,
+	base: usize,
 }
 
-#[macro_export]
-macro_rules! handler {
-	($isr: ident) => {{
-		#[naked]
-		extern "C" fn wrapper() {
-			unsafe {
-				naked_asm!(
-					// disable interrupt
-					"cli",
-					// Set up stack frame
-					"push ebp",
-					"mov ebp, esp",
-					// Save all general-purpose registers
-					"pushad",
-					// Calculate the correct stack frame pointer
-					"mov eax, esp",
-					// Call the actual interrupt handler
-					"call {}",
-					// Restore all general-purpose registers
-					"popad",
-					// Restore base pointer and return from interrupt
-					"pop ebp",
-					// enable interrupt
-					"sti",
-					"iretd",
-					sym $isr,
-				);
-			}
-		}
-		wrapper as extern "C" fn()
-	}};
+#[link_section = ".idt"]
+static IDT_BASE: [IdtEntry; ENTRY_COUNT] = [IdtEntry::new(0, 0, 0); ENTRY_COUNT];
+
+static mut IDT: *mut [IdtEntry; ENTRY_COUNT] = core::ptr::null_mut();
+
+unsafe fn set_idt() {
+	IDT = (&IDT_BASE as *const _ as usize) as *mut [IdtEntry; ENTRY_COUNT];
+	let idt: &mut [IdtEntry; ENTRY_COUNT] = &mut *IDT;
+
+	crate::println!("set_idt: IDT_BASE 0x{:08x}", &IDT_BASE as *const _ as usize);
+
+	idt[0x00] = IdtEntry::new(DIV_BY_ZERO as usize, 0x08, 0x8E);
+	idt[0x01] = IdtEntry::new(SINGLE_STEP_INT as usize, 0x08, 0x8E);
+	idt[0x02] = IdtEntry::new(NMI as usize, 0x08, 0x8E);
+	idt[0x03] = IdtEntry::new(BREAKPOINT as usize, 0x08, 0x8E);
+	idt[0x04] = IdtEntry::new(OVERFLOW as usize, 0x08, 0x8E);
+	idt[0x05] = IdtEntry::new(BOUND_RANGE_EXCEED as usize, 0x08, 0x8E);
+	idt[0x06] = IdtEntry::new(INV_OPCODE as usize, 0x08, 0x8E);
+	idt[0x07] = IdtEntry::new(COPROC_NOT_AVAIL as usize, 0x08, 0x8E);
+	idt[0x08] = IdtEntry::new(DOUBLE_FAULT as usize, 0x08, 0x8E);
+	idt[0x09] = IdtEntry::new(COPROC_SEGMENT_OVERRUN as usize, 0x08, 0x8E);
+	idt[0x0A] = IdtEntry::new(INV_TSS as usize, 0x08, 0x8E);
+	idt[0x0B] = IdtEntry::new(SEGMENT_NOT_PRESENT as usize, 0x08, 0x8E);
+	idt[0x0C] = IdtEntry::new(STACK_SEGMENT_FAULT as usize, 0x08, 0x8E);
+	idt[0x0D] = IdtEntry::new(GENERAL_PROTECTION_FAULT as usize, 0x08, 0x8E);
+	idt[0x0E] = IdtEntry::new(PAGE_FAULT as usize, 0x08, 0x8E);
+	idt[0x0F] = IdtEntry::new(RESERVED as usize, 0x08, 0x8E);
+	idt[0x10] = IdtEntry::new(FLOATING_POINT_EXCEPTION as usize, 0x08, 0x8E);
+	idt[0x11] = IdtEntry::new(ALIGNMENT_CHECK as usize, 0x08, 0x8E);
+	idt[0x12] = IdtEntry::new(MACHINE_CHECK as usize, 0x08, 0x8E);
+	idt[0x13] = IdtEntry::new(VIRTUALIZATION_EXCEPTION as usize, 0x08, 0x8E);
+	idt[0x14] = IdtEntry::new(CONTROL_PROTECTION_EXCEPTION as usize, 0x08, 0x8E);
+	idt[0x20] = IdtEntry::new(TIMER_INTERRUPT as usize, 0x08, 0x8E);
+	idt[0x80] = IdtEntry::new(SYSCALL as usize, 0x08, 0xEE);
 }
-
-// List of interrupts - informative purpose
-// pub enum Interrupts {
-// 	DivByZero = 0x00,
-// 	SingleStepInt = 0x01,
-// 	NMI = 0x02,
-// 	Breakpoint = 0x03,
-// 	Overflow = 0x04,
-// 	BoundRangeExceed = 0x05,
-// 	InvOpcode = 0x06,
-// 	CoprocNotAvail = 0x07,
-// 	DoubleFault = 0x08,
-// 	CoprocSegmentOverrun = 0x09,
-// 	InvTSS = 0x0A,
-// 	SegmentNotPresent = 0x0B,
-// 	StackSegmentFault = 0x0C,
-// 	GeneralProtectionFault = 0x0D,
-// 	PageFault = 0x0E,
-// 	Reserved = 0x0F,
-// 	FloatPointException = 0x10,
-// 	AlignemntCheck = 0x11,
-// 	MachineCheck = 0x12,
-// 	SIMDFloatingPointException = 0x13,
-// 	VirtualizationException = 0x14,
-// 	ControlProtectionException = 0x15,
-// }
-// source: https://en.wikipedia.org/wiki/Interrupt_descriptor_table
-
-static DIV_BY_ZERO: extern "C" fn() = handler!(div_by_zero);
-// static SINGLE_STEP_INT: extern "C" fn() = handler!();
-// static NMI: extern "C" fn() = handler!();
-// static BREAKPOINT: extern "C" fn() = handler!();
-// static OVERFLOW: extern "C" fn() = handler!();
-// static BOUND_RANGE_EXCEED: extern "C" fn() = handler!();
-// static INV_OPCODE: extern "C" fn() = handler!();
-// static COPROC_NOT_AVAIL: extern "C" fn() = handler!();
-// static DOUBLE_FAULT: extern "C" fn() = handler!();
-// static COPROC_SEGMENT_OVERRUN: extern "C" fn() = handler!();
-// static INV_TSS: extern "C" fn() = handler!();
-// static SEGMENT_NOT_PRESENT: extern "C" fn() = handler!();
-// static STACK_SEGMENT_FAULT: extern "C" fn() = handler!();
-static GENERAL_PROTECTION_FAULT: extern "C" fn() = handler!(general_protection_fault);
-static PAGE_FAULT: extern "C" fn() = handler!(page_fault);
-// static RESERVED: extern "C" fn() = handler!();
-// static FLOATING_POINT_EXCEPTION: extern "C" fn() = handler!();
-// static ALIGNMENT_CHECK: extern "C" fn() = handler!();
-// static MACHINE_CHECK: extern "C" fn() = handler!();
-// static VIRTUALIZATION_EXCEPTION: extern "C" fn() = handler!();
-// static CONTROL_PROTECTION_EXCEPTION: extern "C" fn() = handler!();
 
 pub unsafe fn load() {
-	IDT.entries[0x00] = IdtEntry::new(DIV_BY_ZERO as u32, 0x08, 0x8E);
-	IDT.entries[0x0D] = IdtEntry::new(GENERAL_PROTECTION_FAULT as u32, 0x08, 0x8E);
-	IDT.entries[0x0E] = IdtEntry::new(PAGE_FAULT as u32, 0x08, 0x8E);
-	
+	set_idt();
 	let idtr = IdtPtr {
-		limit: (core::mem::size_of::<Idt>() - 1) as u16,
-		base: &raw const IDT as *const _ as u32,
+		limit: (core::mem::size_of::<Idt>()) as u16,
+		base: &IDT_BASE as *const _ as usize,
 	};
 	asm!("lidt [{}]", in(reg) &idtr as *const IdtPtr, options(nostack, preserves_flags, readonly));
-	crate::println!("IDT loaded at 0x{:08x}", &raw const IDT as *const _ as u32);
-	
+	crate::println!(
+		"IDT_BASE loaded at 0x{:08x}",
+		&IDT_BASE as *const _ as usize
+	);
+
 	{
-		let mut idtr = IdtPtr { limit: 0, base: 0 };
-		asm!("sidt [{}]", in(reg) &mut idtr as *mut IdtPtr);
-		let base = idtr.base;
-		let limit = idtr.limit;
+		let mut idtr2 = IdtPtr { limit: 0, base: 0 };
+		asm!("sidt [{}]", in(reg) &mut idtr2 as *mut IdtPtr);
+		let base = idtr2.base;
+		let limit = idtr2.limit;
 		crate::println!("IDT base: 0x{:08x}, limit: {}", base, limit);
 	}
-	
-	asm!("sti");
+
+	// Turn off to run without IDT to avoid crash
+	// asm!("sti");
 }
-
-
-// Given by CPU
-#[derive(Debug)]
-#[allow(unused)]
-#[repr(C, packed)]
-pub struct IntStackFrame {
-	pub eip: u32,
-	pub cs: u32,
-	pub eflags: u32,
-	pub esp: u32,
-	pub ss: u32,
-}
-
-#[no_mangle]
-pub extern "C" fn div_by_zero(frame: &IntStackFrame, error_code: u32) {
-	let eip = frame.eip;
-    crate::println!("division by zero");
-	crate::println!("error code: 0x{:X}", error_code);
-    crate::println!("eip: 0x{:08x}", eip);
-}
-
-#[no_mangle]
-pub extern "C" fn general_protection_fault(frame: &IntStackFrame, error_code: u32) {
-	let eip = frame.eip;
-	crate::println!("general protection fault");
-	crate::println!("error code: 0x{:X}", error_code);
-    crate::println!("eip: 0x{:08x}", eip);
-}
-
-#[no_mangle]
-pub extern "C" fn page_fault(frame: &IntStackFrame, error_code: u32) {
-	let eip = frame.eip;
-	crate::println!("page fault");
-	crate::println!("error code: 0x{:X}", error_code);
-    crate::println!("eip: 0x{:08x}", eip);
-}
-

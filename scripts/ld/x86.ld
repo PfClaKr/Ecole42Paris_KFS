@@ -27,6 +27,11 @@ SECTIONS {
         *(.bss*)
     } : data
 
+	.idt : ALIGN(4K)
+    {
+        *(.idt)
+    } : data
+
    .stack : ALIGN(4K)
     {
         *(.stack)

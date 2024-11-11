@@ -227,10 +227,7 @@ pub fn init(multiboot_info: usize, paging_status: bool) {
 
 	PAGE_DIRECTORY.lock().clear();
 
-	PAGE_DIRECTORY
-		.lock()
-		.map_page(0x0, 0x0, 0x3)
-		.unwrap();
+	PAGE_DIRECTORY.lock().map_page(0x0, 0x0, 0x3).unwrap();
 	PAGE_DIRECTORY
 		.lock()
 		.map_page(0xb8000, 0xb8000, 0x3)

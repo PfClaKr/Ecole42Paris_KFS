@@ -8,10 +8,12 @@ mod include;
 mod io;
 mod memory;
 
+#[allow(unused_imports)]
+use core::arch::asm;
+
 use io::shell::Shell;
 use memory::dynamicmemory::Privilege;
 
-#[allow(unconditional_panic)]
 fn welcome_message() {
 	println!("\x1b[5;m   ___  _____     ");
 	println!("\x1b[9;m  /   |/ __  \\   ");
@@ -21,7 +23,6 @@ fn welcome_message() {
 	println!("\x1b[10;m    |_/\\_____/    ");
 	println!("\x1b[15;mKnife Fork Spoon");
 	println!("KFS 42 - \x1b[9;mychun, \x1b[3;mschaehun\x1b[15;m");
-	println!("12 / 0 : {}", 12 / 0);
 }
 
 #[allow(unused)]
@@ -44,6 +45,9 @@ fn init(multiboot_info: usize, paging_status: bool) {
 		Privilege::Kernel,
 		paging_status,
 	);
+	// Division by Zero interrupt
+	// asm!("int 0x0");
+
 	// memory::heap_test::alloc_test(paging_status);
 }
 
@@ -54,6 +58,6 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 		"System have to load by Multiboot2 boot loader."
 	);
 	init(multiboot_info, true);
-	welcome_message();
+	// welcome_message();
 	Shell::new().run();
 }
