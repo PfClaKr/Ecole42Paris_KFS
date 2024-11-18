@@ -11,6 +11,7 @@ mod memory;
 #[allow(unused_imports)]
 use core::arch::asm;
 
+use include::asm_utile::hlt;
 use io::shell::Shell;
 use memory::dynamicmemory::Privilege;
 
@@ -31,24 +32,34 @@ fn init(multiboot_info: usize, paging_status: bool) {
 	unsafe {
 		include::idt::load();
 	}
-	memory::physicalmemory::init(multiboot_info);
-	memory::virtualmemory::init(multiboot_info, paging_status);
-	memory::dynamicmemory::USER_ALLOCATOR.lock().init(
-		0x300000,
-		0x800B_5000, // ≒ 2GB
-		Privilege::User,
-		paging_status,
-	);
-	memory::dynamicmemory::KERNEL_ALLOCATOR.lock().init(
-		0x800B_6000,
-		0xBFFE_0000, // ≒ 1GB
-		Privilege::Kernel,
-		paging_status,
-	);
+	crate::println!("????");
+	// unsafe {
+	// 	asm!("int 0x0");
+	// }
+	// loop {}
+	// memory::physicalmemory::init(multiboot_info);
+	// memory::virtualmemory::init(multiboot_info, paging_status);
+	// memory::dynamicmemory::USER_ALLOCATOR.lock().init(
+	// 	0x300000,
+	// 	0x800B_5000, // ≒ 2GB
+	// 	Privilege::User,
+	// 	paging_status,
+	// );
+	// memory::dynamicmemory::KERNEL_ALLOCATOR.lock().init(
+	// 	0x800B_6000,
+	// 	0xBFFE_0000, // ≒ 1GB
+	// 	Privilege::Kernel,
+	// 	paging_status,
+	// );
 	// Division by Zero interrupt
-	// asm!("int 0x0");
+	// unsafe {
+	// 	asm!("int 0x0");
+	// }
 
 	// memory::heap_test::alloc_test(paging_status);
+	// unsafe {
+	// 	core::arch::asm!("sti");
+	// }
 }
 
 #[no_mangle]
@@ -59,5 +70,5 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 	);
 	init(multiboot_info, true);
 	// welcome_message();
-	Shell::new().run();
+	// Shell::new().run();
 }

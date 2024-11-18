@@ -157,7 +157,7 @@ pub fn init(multiboot_info: usize) {
 
 		let mut kernel_start = symbols::get_kernel_start() as usize & !0xFFF;
 		let kernel_end = symbols::get_kernel_end() as usize & !0xFFF;
-		crate::println!("kernel alloc: 0x{:x}, 0x{:x}", kernel_start, kernel_end);
+		// crate::println!("[PHYSICAL] kernel alloc: 0x{:08x}, 0x{:08x}", kernel_start, kernel_end);
 		while kernel_start <= kernel_end {
 			BITMAP.lock().alloc_frame_address(kernel_start).unwrap();
 			kernel_start += 0x1000;
@@ -173,6 +173,6 @@ pub fn init(multiboot_info: usize) {
 				.alloc_frame_address(multiboot_info_address)
 				.unwrap();
 		}
-		crate::println!("multiboot alloc: 0x{:x}", multiboot_info_address);
+		// crate::println!("multiboot alloc: 0x{:x}", multiboot_info_address);
 	}
 }

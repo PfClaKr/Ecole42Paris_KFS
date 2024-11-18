@@ -35,7 +35,7 @@ macro_rules! handler {
 		extern "C" fn wrapper() {
 			unsafe {
 				naked_asm!(
-					"cli",
+					// "cli",
 					"push ebp",
 					"mov ebp, esp",
 					"pushad",
@@ -45,7 +45,7 @@ macro_rules! handler {
 					"pop eax",
 					"popad",
 					"pop ebp",
-					"sti",
+					// "sti",
 					"iretd",
 					sym $isr,
 				);
@@ -56,33 +56,35 @@ macro_rules! handler {
 }
 
 // Must be defined before enabling IDT
-#[warn(unused)]
-pub static DIV_BY_ZERO: extern "C" fn() = handler!(div_by_zero);
-pub static SINGLE_STEP_INT: extern "C" fn() = handler!(single_step_int);
-pub static NMI: extern "C" fn() = handler!(nmi);
-pub static BREAKPOINT: extern "C" fn() = handler!(breakpoint);
-pub static OVERFLOW: extern "C" fn() = handler!(overflow);
-pub static BOUND_RANGE_EXCEED: extern "C" fn() = handler!(bound_range_exceed);
-pub static INV_OPCODE: extern "C" fn() = handler!(inv_opcode);
-pub static COPROC_NOT_AVAIL: extern "C" fn() = handler!(coproc_not_avail);
-pub static DOUBLE_FAULT: extern "C" fn() = handler!(double_fault);
-pub static COPROC_SEGMENT_OVERRUN: extern "C" fn() = handler!(coproc_segment_overrun);
-pub static INV_TSS: extern "C" fn() = handler!(inv_tss);
-pub static SEGMENT_NOT_PRESENT: extern "C" fn() = handler!(segment_not_present);
-pub static STACK_SEGMENT_FAULT: extern "C" fn() = handler!(stack_segment_fault);
-pub static GENERAL_PROTECTION_FAULT: extern "C" fn() = handler!(general_protection_fault);
-pub static PAGE_FAULT: extern "C" fn() = handler!(page_fault);
-pub static RESERVED: extern "C" fn() = handler!(reserved);
-pub static FLOATING_POINT_EXCEPTION: extern "C" fn() = handler!(floating_point_exception);
-pub static ALIGNMENT_CHECK: extern "C" fn() = handler!(alignment_check);
-pub static MACHINE_CHECK: extern "C" fn() = handler!(machine_check);
-pub static VIRTUALIZATION_EXCEPTION: extern "C" fn() = handler!(virtualization_exception);
-pub static CONTROL_PROTECTION_EXCEPTION: extern "C" fn() = handler!(control_protection_exception);
-pub static TIMER_INTERRUPT: extern "C" fn() = handler!(timer_interrupt);
-pub static SYSCALL: extern "C" fn() = handler!(syscall);
+// #[warn(unused)]
+// pub static DIV_BY_ZERO: extern "C" fn() = div_by_zero;
+// pub static SINGLE_STEP_INT: extern "C" fn() = single_step_int;
+// pub static NMI: extern "C" fn() = nmi;
+// pub static BREAKPOINT: extern "C" fn() = breakpoint;
+// pub static OVERFLOW: extern "C" fn() = overflow;
+// pub static BOUND_RANGE_EXCEED: extern "C" fn() = bound_range_exceed;
+// pub static INV_OPCODE: extern "C" fn() = inv_opcode;
+// pub static COPROC_NOT_AVAIL: extern "C" fn() = coproc_not_avail;
+// pub static DOUBLE_FAULT: extern "C" fn() = double_fault;
+// pub static COPROC_SEGMENT_OVERRUN: extern "C" fn() = coproc_segment_overrun;
+// pub static INV_TSS: extern "C" fn() = inv_tss;
+// pub static SEGMENT_NOT_PRESENT: extern "C" fn() = segment_not_present;
+// pub static STACK_SEGMENT_FAULT: extern "C" fn() = stack_segment_fault;
+// pub static GENERAL_PROTECTION_FAULT: extern "C" fn() = general_protection_fault;
+// pub static PAGE_FAULT: extern "C" fn() = page_fault;
+// pub static RESERVED: extern "C" fn() = reserved;
+// pub static FLOATING_POINT_EXCEPTION: extern "C" fn() = floating_point_exception;
+// pub static ALIGNMENT_CHECK: extern "C" fn() = alignment_check;
+// pub static MACHINE_CHECK: extern "C" fn() = machine_check;
+// pub static SIMD_FLOATING_POINT_EXCEPTION: extern "C" fn() = simd_floating_point_exception;
+// pub static VIRTUALIZATION_EXCEPTION: extern "C" fn() = virtualization_exception;
+// pub static CONTROL_PROTECTION_EXCEPTION: extern "C" fn() = control_protection_exception;
+// pub static TIMER_INTERRUPT: extern "C" fn() = timer_interrupt;
+// pub static KEYBOARD_INTERRUPT: extern "C" fn() = keyboard_interrupt;
+// pub static SYSCALL: extern "C" fn() = syscall;
 
 #[allow(unused)]
-pub static DEFAULT: extern "C" fn() = handler!(default);
+pub static DEFAULT: extern "C" fn() = default;
 
 #[derive(Debug)]
 #[allow(unused)]
@@ -222,11 +224,11 @@ pub extern "C" fn general_protection_fault() {
 }
 
 #[no_mangle]
-pub extern "C" fn page_fault(frame: &IntStackFrame) {
+pub extern "C" fn page_fault() {
 	crate::println!("page fault");
-	let eip = frame.eip;
-	// crate::println!("error code: 0x{:X}", error_code);
-	crate::println!("eip: 0x{:08x}", eip);
+	// let eip = frame.eip;
+	// // crate::println!("error code: 0x{:X}", error_code);
+	// crate::println!("eip: 0x{:08x}", eip);
 	hlt();
 }
 
@@ -267,6 +269,15 @@ pub extern "C" fn machine_check() {
 }
 
 #[no_mangle]
+pub extern "C" fn simd_floating_point_exception() {
+	crate::println!("simd_floating_point_exception");
+	// let eip = frame.eip;
+	// crate::println!("error code: 0x{:X}", error_code);
+	// crate::println!("eip: 0x{:08x}", eip);
+	hlt();
+}
+
+#[no_mangle]
 pub extern "C" fn virtualization_exception() {
 	crate::println!("virtualization_exception");
 	// let eip = frame.eip;
@@ -287,6 +298,15 @@ pub extern "C" fn control_protection_exception() {
 #[no_mangle]
 pub extern "C" fn timer_interrupt() {
 	crate::println!("timer_interrupt");
+	// let eip = frame.eip;
+	// crate::println!("error code: 0x{:X}", error_code);
+	// crate::println!("eip: 0x{:08x}", eip);
+	hlt();
+}
+
+#[no_mangle]
+pub extern "C" fn keyboard_interrupt() {
+	crate::println!("keyboard_interrupt");
 	// let eip = frame.eip;
 	// crate::println!("error code: 0x{:X}", error_code);
 	// crate::println!("eip: 0x{:08x}", eip);

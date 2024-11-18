@@ -232,6 +232,7 @@ pub fn init(multiboot_info: usize, paging_status: bool) {
 		.lock()
 		.map_page(0xb8000, 0xb8000, 0x3)
 		.unwrap();
+	// crate::println!("[VIRTUAL]  kernel alloc: 0x{:08x}, 0x{:08x}", kernel_start_page, kernel_end_page);
 	while kernel_start_page <= kernel_end_page {
 		PAGE_DIRECTORY
 			.lock()
