@@ -30,11 +30,11 @@ pub enum InterruptIndex {
 }
 // source: https://en.wikipedia.org/wiki/Interrupt_descriptor_table
 
-use core::arch::asm;
-
+use core::arch::{asm, naked_asm};
+use core::sync::atomic::{AtomicU32, Ordering};
 use spin::Mutex;
 
-use crate::include::asm_utile::hlt;
+use crate::include::asm_utile::{hlt, outb};
 
 use super::pic::{ChainedPics, PIC_1_OFFSET, PIC_2_OFFSET};
 
@@ -138,16 +138,72 @@ create_isr!(
 pub static PIC: Mutex<ChainedPics> =
 	Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
+const PIT_FREQUENCY: u32 = 1193182; // Base PIT frequency in Hz.
+const DESIRED_FREQUENCY: u32 = 100; // Desired timer interrupt frequency in Hz.
+
+static mut TICKS: usize = 0;
+
+/// Write to the PIT control and data ports to set the frequency.
+pub unsafe fn configure_pit(frequency: u32) {
+	let divisor = PIT_FREQUENCY / frequency;
+
+	// Send command byte to PIT control port (0x43).
+	outb(0x43, 0x36 as u8);
+	// Send low byte of divisor to channel 0 data port (0x40).
+	outb(0x40, (divisor & 0xFF) as u8);
+	// Send high byte of divisor to channel 0 data port (0x40).
+	outb(0x40, (divisor >> 8) as u8);
+}
+
+fn timer_interrupt_handler() {
+	unsafe {
+		TICKS += 1;
+
+		if TICKS % DESIRED_FREQUENCY as usize == 0 {
+			crate::println!("System is up for {} seconds", TICKS / 100);
+		}
+	}
+}
+
 #[no_mangle]
 pub extern "C" fn timer_interrupt(frame: IntStackFrame) {
-	// crate::println!("timer_interrupt");
+	// use crate::include::interrupts::is_enabled;
+	// crate::println!("timer_interrupt: {}", is_enabled());
 	// let eip = frame.eip;
 	// // crate::println!("error code: 0x{:X}", error_code);
 	// crate::println!("eip: 0x{:08x}", eip);
 	unsafe {
-		PIC.lock()
-			.notify_end_of_interrupt(InterruptIndex::Timer as u8);
+		core::arch::asm!(
+			"push eax",
+			"push ebx",
+			"push ecx",
+			"push edx",
+			"push esi",
+			"push edi",
+			"push ebp",
+
+			"call {handler}",
+			"mov al, 0x20",
+			"out 0x20, al",
+
+			"pop ebp",
+			"pop edi",
+			"pop esi",
+			"pop edx",
+			"pop ecx",
+			"pop ebx",
+			"pop eax",
+			"iretd",
+			handler = sym timer_interrupt_handler,
+			options(noreturn),
+		);
 	}
+	// unsafe {
+	// 	timer_interrupt_handler();
+	// 	PIC.lock()
+	// 		.notify_end_of_interrupt(InterruptIndex::Timer as u8);
+	// }
+	// crate::println!("end of timer_interrupt: {}", is_enabled());
 }
 
 #[no_mangle]

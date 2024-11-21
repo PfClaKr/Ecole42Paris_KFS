@@ -17,8 +17,8 @@ use core::{arch::asm, fmt};
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
-	use core::fmt::Write;
 	use crate::include::interrupts::is_enabled;
+	use core::fmt::Write;
 	// if vga_buffer::WRITER.is_locked() {
 	// 	unsafe { vga_buffer::WRITER.force_unlock() };
 	// }

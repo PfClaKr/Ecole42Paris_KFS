@@ -25,7 +25,7 @@ use crate::include::asm_utile::{inb, outb};
 use crate::include::interrupts;
 
 pub const PIC_1_OFFSET: u8 = 0x20;
-pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 0x8;
+pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 /// Command sent to begin PIC initialization.
 const CMD_INIT: u8 = 0x11;
@@ -193,5 +193,6 @@ impl ChainedPics {
 pub fn load() {
 	unsafe {
 		interrupts::PIC.lock().initialize();
+		interrupts::configure_pit(100);
 	}
 }

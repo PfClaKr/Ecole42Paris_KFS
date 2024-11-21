@@ -11,7 +11,7 @@ mod memory;
 #[allow(unused_imports)]
 use core::arch::asm;
 
-use include::asm_utile::hlt;
+use include::{asm_utile::hlt, interrupts::is_enabled};
 use io::shell::Shell;
 use memory::dynamicmemory::Privilege;
 
