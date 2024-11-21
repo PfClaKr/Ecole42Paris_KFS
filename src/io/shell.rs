@@ -3,9 +3,19 @@ use crate::io::keyboard;
 use crate::io::vga_buffer::WRITER;
 use crate::memory::physicalmemory::BITMAP;
 use crate::{print, println};
+use spin::Mutex;
 
-const INPUT_SIZE: usize = 77;
+pub const INPUT_SIZE: usize = 77;
 const TAB_SIZE: usize = 4;
+
+pub static SHELL: Mutex<Shell> = Mutex::new(Shell {
+	prompt: "$> ",
+	last_input1: [0; INPUT_SIZE],
+	last_len1: 0,
+	last_input2: [0; INPUT_SIZE],
+	last_len2: 0,
+	current_shell: 1,
+});
 
 pub struct Shell {
 	prompt: &'static str,
@@ -17,29 +27,6 @@ pub struct Shell {
 }
 
 impl Shell {
-	pub fn new() -> Self {
-		Shell {
-			prompt: "$> ",
-			last_input1: [0; INPUT_SIZE],
-			last_len1: 0,
-			last_input2: [0; INPUT_SIZE],
-			last_len2: 0,
-			current_shell: 1,
-		}
-	}
-
-	pub fn run(&mut self) {
-		keyboard::init();
-		let mut input = [0u8; INPUT_SIZE];
-		let mut len = 0;
-		loop {
-			self.display_prompt();
-			self.read_input(&mut input, &mut len);
-			self.execute_command(&input[..len]);
-			len = 0;
-		}
-	}
-
 	fn execute_command(&mut self, input: &[u8]) {
 		use core::str;
 		match str::from_utf8(input) {
@@ -175,47 +162,48 @@ User experience :
 		hexdump::print(stack_pointer as *const u8, stack_size);
 	}
 
-	fn display_prompt(&self) {
+	pub fn display_prompt(&self) {
 		print!("{}", self.prompt);
 	}
 
-	fn read_input(&mut self, input: &mut [u8], len: &mut usize) {
-		loop {
-			if let Some(c) = keyboard::read() {
-				match c {
-					'\n' => {
-						print!("\n");
-						break;
+	pub fn read_input(&mut self, input: &mut [u8; INPUT_SIZE], len: &mut usize) {
+		if let Some(c) = keyboard::read() {
+			match c {
+				'\n' => {
+					// let input = self.input;
+					print!("\n");
+					self.execute_command(&input[..*len]);
+					*len = 0;
+					self.display_prompt();
+				}
+				'\x7f' => {
+					if *len > 0 {
+						*len -= 1;
+						input[*len] = b'\0';
+						print!("{}", '\x7f');
 					}
-					'\x7f' => {
-						if *len > 0 {
-							*len -= 1;
-							input[*len] = b'\0';
-							print!("{}", '\x7f');
-						}
-					}
-					'\x09' => {
-						print!("{}", " ".repeat(TAB_SIZE));
-					}
-					'\x01' => {
-						self.switch_shell(1, input, len);
-					}
-					'\x02' => {
-						self.switch_shell(2, input, len);
-					}
-					_ => {
-						if *len < input.len() {
-							input[*len] = c as u8;
-							*len += 1;
-							print!("{}", c);
-						}
+				}
+				'\x09' => {
+					print!("{}", " ".repeat(TAB_SIZE));
+				}
+				'\x01' => {
+					self.switch_shell(1, input, len);
+				}
+				'\x02' => {
+					self.switch_shell(2, input, len);
+				}
+				_ => {
+					if *len < input.len() {
+						input[*len] = c as u8;
+						*len += 1;
+						print!("{}", c);
 					}
 				}
 			}
 		}
 	}
 
-	fn switch_shell(&mut self, new_shell: u8, input: &mut [u8], len: &mut usize) {
+	fn switch_shell(&mut self, new_shell: u8, input: &mut [u8; INPUT_SIZE], len: &mut usize) {
 		if self.current_shell != new_shell {
 			if self.current_shell == 1 {
 				self.last_input1[..*len].copy_from_slice(&input[..*len]);
