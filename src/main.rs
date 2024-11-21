@@ -11,6 +11,7 @@ mod memory;
 #[allow(unused_imports)]
 use core::arch::asm;
 
+use include::asm_utile::hlt;
 use io::shell::Shell;
 use memory::dynamicmemory::Privilege;
 
@@ -61,5 +62,11 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 	);
 	init(multiboot_info, true);
 	welcome_message();
+	unsafe {
+		asm!("sti");
+	}
+	loop {
+		hlt();
+	}
 	Shell::new().run();
 }

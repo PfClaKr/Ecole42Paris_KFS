@@ -30,6 +30,8 @@ pub enum InterruptIndex {
 }
 // source: https://en.wikipedia.org/wiki/Interrupt_descriptor_table
 
+use core::arch::asm;
+
 use spin::Mutex;
 
 use crate::include::asm_utile::hlt;
@@ -143,7 +145,8 @@ pub extern "C" fn timer_interrupt(frame: IntStackFrame) {
 	// // crate::println!("error code: 0x{:X}", error_code);
 	// crate::println!("eip: 0x{:08x}", eip);
 	unsafe {
-		PIC.lock().notify_end_of_interrupt(InterruptIndex::Timer as u8);
+		PIC.lock()
+			.notify_end_of_interrupt(InterruptIndex::Timer as u8);
 	}
 }
 
@@ -154,7 +157,8 @@ pub extern "C" fn keyboard_interrupt(frame: IntStackFrame) {
 	// // crate::println!("error code: 0x{:X}", error_code);
 	// crate::println!("eip: 0x{:08x}", eip);
 	unsafe {
-		PIC.lock().notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
+		PIC.lock()
+			.notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
 	}
 }
 
@@ -165,4 +169,16 @@ pub extern "C" fn syscall(frame: IntStackFrame) {
 	// crate::println!("error code: 0x{:X}", error_code);
 	crate::println!("eip: 0x{:08x}", eip);
 	hlt();
+}
+
+pub fn is_enabled() -> bool {
+	let eflags: u32;
+	unsafe {
+		asm!(
+			"pushfd",
+			"pop {0:e}",
+			out(reg) eflags
+		);
+	}
+	(eflags & (1 << 9)) != 0
 }

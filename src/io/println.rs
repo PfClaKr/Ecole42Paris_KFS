@@ -13,15 +13,26 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-use core::fmt;
+use core::{arch::asm, fmt};
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
 	use core::fmt::Write;
+	use crate::include::interrupts::is_enabled;
 	// if vga_buffer::WRITER.is_locked() {
 	// 	unsafe { vga_buffer::WRITER.force_unlock() };
 	// }
-	// unsafe { asm!("cli"); }
+	let sti = is_enabled();
+
+	if sti {
+		unsafe {
+			asm!("cli");
+		}
+	}
 	vga_buffer::WRITER.lock().write_fmt(args).unwrap();
-	// unsafe { asm!("sti"); }
+	if sti {
+		unsafe {
+			asm!("sti");
+		}
+	}
 }

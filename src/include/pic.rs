@@ -21,13 +21,11 @@
 
 // #![no_std]
 
-use core::arch::asm;
-
 use crate::include::asm_utile::{inb, outb};
 use crate::include::interrupts;
 
-pub const PIC_1_OFFSET: u8 = 32;
-pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
+pub const PIC_1_OFFSET: u8 = 0x20;
+pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 0x8;
 
 /// Command sent to begin PIC initialization.
 const CMD_INIT: u8 = 0x11;
@@ -135,7 +133,7 @@ impl ChainedPics {
 		outb(self.pics[0].data as u16, self.pics[0].offset);
 		wait();
 		// self.pics[1].data.write(self.pics[1].offset);
-		outb(self.pics[1].data as u16, self.pics[0].offset);
+		outb(self.pics[1].data as u16, self.pics[1].offset);
 		wait();
 
 		// Byte 2: Configure chaining between PIC1 and PIC2.
@@ -195,6 +193,5 @@ impl ChainedPics {
 pub fn load() {
 	unsafe {
 		interrupts::PIC.lock().initialize();
-		asm!("sti");
 	}
 }
