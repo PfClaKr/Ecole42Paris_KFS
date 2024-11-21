@@ -11,7 +11,7 @@ mod memory;
 #[allow(unused_imports)]
 use core::arch::asm;
 
-use include::{asm_utile::hlt, interrupts::is_enabled};
+use include::asm_utile::hlt;
 use io::shell::SHELL;
 use memory::dynamicmemory::Privilege;
 
@@ -46,10 +46,6 @@ fn init(multiboot_info: usize, paging_status: bool) {
 		Privilege::Kernel,
 		paging_status,
 	);
-
-	// unsafe {
-	// 	asm!("int 0x0");
-	// }
 }
 
 #[no_mangle]
@@ -61,8 +57,8 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 	init(multiboot_info, true);
 	welcome_message();
 	SHELL.lock().display_prompt();
+	unsafe { asm!("sti") };
 	loop {
-		unsafe { asm!("sti") };
 		hlt();
 	}
 }

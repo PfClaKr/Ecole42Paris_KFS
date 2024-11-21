@@ -7,7 +7,7 @@ use crate::io::shell::SHELL;
 pub enum InterruptIndex {
 	DivByZero = 0x00,
 	SingleStepInt = 0x01,
-	NMI = 0x02,
+	Nmi = 0x02,
 	Breakpoint = 0x03,
 	Overflow = 0x04,
 	BoundRangeExceed = 0x05,
@@ -32,8 +32,7 @@ pub enum InterruptIndex {
 }
 // source: https://en.wikipedia.org/wiki/Interrupt_descriptor_table
 
-use core::arch::{asm, naked_asm};
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::arch::asm;
 use spin::Mutex;
 
 use crate::include::asm_utile::{hlt, outb};
@@ -101,7 +100,7 @@ pub struct IntStackFrame {
 
 create_isr!(div_by_zero, InterruptIndex::DivByZero);
 create_isr!(single_step_int, InterruptIndex::SingleStepInt);
-create_isr!(nmi, InterruptIndex::NMI);
+create_isr!(nmi, InterruptIndex::Nmi);
 create_isr!(breakpoint, InterruptIndex::Breakpoint);
 create_isr!(overflow, InterruptIndex::Overflow);
 create_isr!(bound_range_exceed, InterruptIndex::BoundRangeExceed);
@@ -150,7 +149,7 @@ pub unsafe fn configure_pit(frequency: u32) {
 	let divisor = PIT_FREQUENCY / frequency;
 
 	// Send command byte to PIT control port (0x43).
-	outb(0x43, 0x36 as u8);
+	outb(0x43, 0x36);
 	// Send low byte of divisor to channel 0 data port (0x40).
 	outb(0x40, (divisor & 0xFF) as u8);
 	// Send high byte of divisor to channel 0 data port (0x40).
@@ -161,19 +160,16 @@ fn timer_interrupt_handler() {
 	unsafe {
 		TICKS += 1;
 
-		if TICKS % DESIRED_FREQUENCY as usize == 0 {
-			crate::println!("System is up for {} seconds", TICKS / 100);
-		}
+		// if TICKS % DESIRED_FREQUENCY as usize == 0 {
+		// 	crate::println!("System is up for {} seconds", TICKS / 100);
+		// }
+		PIC.lock()
+			.notify_end_of_interrupt(InterruptIndex::Timer as u8);
 	}
 }
 
 #[no_mangle]
 pub extern "C" fn timer_interrupt(_: IntStackFrame) {
-	// use crate::include::interrupts::is_enabled;
-	// crate::println!("timer_interrupt: {}", is_enabled());
-	// let eip = frame.eip;
-	// // crate::println!("error code: 0x{:X}", error_code);
-	// crate::println!("eip: 0x{:08x}", eip);
 	unsafe {
 		core::arch::asm!(
 			"push eax",
@@ -185,8 +181,6 @@ pub extern "C" fn timer_interrupt(_: IntStackFrame) {
 			"push ebp",
 
 			"call {handler}",
-			"mov al, 0x20",
-			"out 0x20, al",
 
 			"pop ebp",
 			"pop edi",
@@ -200,23 +194,44 @@ pub extern "C" fn timer_interrupt(_: IntStackFrame) {
 			options(noreturn),
 		);
 	}
-	// unsafe {
-	// 	timer_interrupt_handler();
-	// 	PIC.lock()
-	// 		.notify_end_of_interrupt(InterruptIndex::Timer as u8);
-	// }
-	// crate::println!("end of timer_interrupt: {}", is_enabled());
 }
 
 static mut INPUT: &mut [u8; 77] = &mut [0u8; 77];
 static mut LEN: &mut usize = &mut 0;
 
-#[no_mangle]
-pub extern "C" fn keyboard_interrupt(_: IntStackFrame) {
+fn keyboard_interrupt_handler() {
 	unsafe {
 		SHELL.lock().read_input(INPUT, LEN);
 		PIC.lock()
 			.notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
+	}
+}
+
+#[no_mangle]
+pub extern "C" fn keyboard_interrupt(_: IntStackFrame) {
+	unsafe {
+		core::arch::asm!(
+			"push eax",
+			"push ebx",
+			"push ecx",
+			"push edx",
+			"push esi",
+			"push edi",
+			"push ebp",
+
+			"call {handler}",
+
+			"pop ebp",
+			"pop edi",
+			"pop esi",
+			"pop edx",
+			"pop ecx",
+			"pop ebx",
+			"pop eax",
+			"iretd",
+			handler = sym keyboard_interrupt_handler,
+			options(noreturn),
+		);
 	}
 }
 
