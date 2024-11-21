@@ -140,6 +140,7 @@ pub static PIC: Mutex<ChainedPics> =
 	Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 const PIT_FREQUENCY: u32 = 1193182; // Base PIT frequency in Hz.
+#[allow(unused)]
 const DESIRED_FREQUENCY: u32 = 100; // Desired timer interrupt frequency in Hz.
 
 static mut TICKS: usize = 0;
