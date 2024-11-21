@@ -2,7 +2,6 @@ use crate::include::asm_utile;
 use crate::io::vga_buffer;
 use spin::Mutex;
 
-const KEYBOARD_STATUS_PORT: u16 = 0x64;
 const KEYBOARD_DATA_PORT: u16 = 0x60;
 const SHIFT_LEFT: u8 = 0x2A;
 const SHIFT_RIGHT: u8 = 0x36;
@@ -11,18 +10,6 @@ const SHIFT_RIGHT_RELEASE: u8 = 0x36 + 0x80;
 
 static SHIFT_PRESSED: Mutex<bool> = Mutex::new(false);
 static mut LAST_SCANCODE: u8 = 0;
-
-pub fn init() {
-	unsafe {
-		asm_utile::outb(KEYBOARD_STATUS_PORT, 0xAE);
-
-		while asm_utile::inb(KEYBOARD_STATUS_PORT) & 0x01 != 0 {
-			let _ = asm_utile::inb(KEYBOARD_DATA_PORT);
-		}
-
-		asm_utile::outb(KEYBOARD_DATA_PORT, 0xF4);
-	}
-}
 
 pub fn read() -> Option<char> {
 	let scancode: u8;

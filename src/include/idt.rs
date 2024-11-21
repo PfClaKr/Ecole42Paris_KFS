@@ -1,10 +1,10 @@
 #[allow(unused_imports)]
 use crate::include::interrupts::{
-	alignment_check, bound_range_exceed, breakpoint, control_protection_exception,
-	coproc_not_avail, coproc_segment_overrun, div_by_zero, double_fault, floating_point_exception,
-	general_protection_fault, inv_opcode, inv_tss, keyboard_interrupt, machine_check, nmi,
-	overflow, page_fault, reserved, segment_not_present, simd_floating_point_exception,
-	single_step_int, stack_segment_fault, syscall, timer_interrupt, virtualization_exception,
+	alignment_check, bound_range_exceed, breakpoint, coproc_not_avail, coproc_segment_overrun,
+	div_by_zero, double_fault, floating_point_exception, general_protection_fault, inv_opcode,
+	inv_tss, keyboard_interrupt, machine_check, nmi, overflow, page_fault, segment_not_present,
+	simd_floating_point_exception, single_step_int, stack_segment_fault, syscall, timer_interrupt,
+	virtualization_exception,
 };
 
 use core::arch::asm;

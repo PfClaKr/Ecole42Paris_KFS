@@ -12,7 +12,7 @@ mod memory;
 use core::arch::asm;
 
 use include::asm_utile::hlt;
-use io::shell::Shell;
+use io::shell::SHELL;
 use memory::dynamicmemory::Privilege;
 
 #[allow(unused)]
@@ -50,8 +50,6 @@ fn init(multiboot_info: usize, paging_status: bool) {
 	// unsafe {
 	// 	asm!("int 0x0");
 	// }
-	// loop {}
-	// memory::heap_test::alloc_test(paging_status);
 }
 
 #[no_mangle]
@@ -62,11 +60,9 @@ pub extern "C" fn kernel_main(magic: u32, multiboot_info: usize) {
 	);
 	init(multiboot_info, true);
 	welcome_message();
-	unsafe {
-		asm!("sti");
-	}
+	SHELL.lock().display_prompt();
 	loop {
+		unsafe { asm!("sti") };
 		hlt();
 	}
-	Shell::new().run();
 }

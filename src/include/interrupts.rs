@@ -1,3 +1,5 @@
+use crate::io::shell::SHELL;
+
 // List of interrupts - informative purpose
 #[repr(usize)]
 #[derive(Debug, PartialEq)]
@@ -115,7 +117,7 @@ create_isr!(
 	InterruptIndex::GeneralProtectionFault
 );
 create_isr!(page_fault, InterruptIndex::PageFault);
-create_isr!(reserved, InterruptIndex::Reserved);
+// create_isr!(reserved, InterruptIndex::Reserved);
 create_isr!(
 	floating_point_exception,
 	InterruptIndex::FloatPointException
@@ -130,16 +132,16 @@ create_isr!(
 	virtualization_exception,
 	InterruptIndex::VirtualizationException
 );
-create_isr!(
-	control_protection_exception,
-	InterruptIndex::ControlProtectionException
-);
+// create_isr!(
+// 	control_protection_exception,
+// 	InterruptIndex::ControlProtectionException
+// );
 
 pub static PIC: Mutex<ChainedPics> =
 	Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 #[no_mangle]
-pub extern "C" fn timer_interrupt(frame: IntStackFrame) {
+pub extern "C" fn timer_interrupt(_: IntStackFrame) {
 	// crate::println!("timer_interrupt");
 	// let eip = frame.eip;
 	// // crate::println!("error code: 0x{:X}", error_code);
@@ -150,13 +152,13 @@ pub extern "C" fn timer_interrupt(frame: IntStackFrame) {
 	}
 }
 
+static mut INPUT: &mut [u8; 77] = &mut [0u8; 77];
+static mut LEN: &mut usize = &mut 0;
+
 #[no_mangle]
-pub extern "C" fn keyboard_interrupt(frame: IntStackFrame) {
-	// crate::println!("keyboard_interrupt");
-	// let eip = frame.eip;
-	// // crate::println!("error code: 0x{:X}", error_code);
-	// crate::println!("eip: 0x{:08x}", eip);
+pub extern "C" fn keyboard_interrupt(_: IntStackFrame) {
 	unsafe {
+		SHELL.lock().read_input(INPUT, LEN);
 		PIC.lock()
 			.notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
 	}
