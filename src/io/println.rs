@@ -21,5 +21,7 @@ pub fn _print(args: fmt::Arguments) {
 	// if vga_buffer::WRITER.is_locked() {
 	// 	unsafe { vga_buffer::WRITER.force_unlock() };
 	// }
+	// unsafe { asm!("cli"); }
 	vga_buffer::WRITER.lock().write_fmt(args).unwrap();
+	// unsafe { asm!("sti"); }
 }
