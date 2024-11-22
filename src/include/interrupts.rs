@@ -21,7 +21,7 @@ pub enum InterruptIndex {
 	PageFault = 0x0E,
 	Reserved = 0x0F,
 	FloatPointException = 0x10,
-	AlignemntCheck = 0x11,
+	AlignmentCheck = 0x11,
 	MachineCheck = 0x12,
 	SIMDFloatingPointException = 0x13,
 	VirtualizationException = 0x14,
@@ -125,7 +125,7 @@ create_isr!(
 	floating_point_exception,
 	InterruptIndex::FloatPointException
 );
-create_isr!(alignment_check, InterruptIndex::AlignemntCheck);
+create_isr!(alignement_check, InterruptIndex::AlignmentCheck);
 create_isr!(machine_check, InterruptIndex::MachineCheck);
 create_isr!(
 	simd_floating_point_exception,
@@ -139,26 +139,25 @@ create_isr!(
 // 	control_protection_exception,
 // 	InterruptIndex::ControlProtectionException
 // );
+create_isr_iretd!(timer_interrupt, timer_interrupt_handler);
+create_isr_iretd!(keyboard_interrupt, keyboard_interrupt_handler);
 
 pub static PIC: Mutex<ChainedPics> =
 	Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
-const PIT_FREQUENCY: u32 = 1193182; // Base PIT frequency in Hz.
+const BASE_FREQUENCY: u32 = 1193182; // Base PIT frequency in Hz.
 #[allow(unused)]
 const DESIRED_FREQUENCY: u32 = 100; // Desired timer interrupt frequency in Hz.
 
 pub static mut TICKS: usize = 0;
 
 pub unsafe fn configure_pit(frequency: u32) {
-	let divisor = PIT_FREQUENCY / frequency;
+	let divisor = BASE_FREQUENCY / frequency;
 
 	outb(0x43, 0x36);
 	outb(0x40, (divisor & 0xFF) as u8);
 	outb(0x40, (divisor >> 8) as u8);
 }
-
-create_isr_iretd!(timer_interrupt, timer_interrupt_handler);
-create_isr_iretd!(keyboard_interrupt, keyboard_interrupt_handler);
 
 fn timer_interrupt_handler() {
 	unsafe {

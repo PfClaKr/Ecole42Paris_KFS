@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use crate::include::interrupts::{
-	alignment_check, bound_range_exceed, breakpoint, coproc_not_avail, coproc_segment_overrun,
+	alignement_check, bound_range_exceed, breakpoint, coproc_not_avail, coproc_segment_overrun,
 	div_by_zero, double_fault, floating_point_exception, general_protection_fault, inv_opcode,
 	inv_tss, keyboard_interrupt, machine_check, nmi, overflow, page_fault, segment_not_present,
 	simd_floating_point_exception, single_step_int, stack_segment_fault, syscall, timer_interrupt,
@@ -134,7 +134,7 @@ unsafe fn set_idt() {
 	);
 	write_volatile(
 		idt_ptr.offset(0x11),
-		IdtEntry::new(alignment_check as usize, 0x08, 0x8E),
+		IdtEntry::new(alignement_check as usize, 0x08, 0x8E),
 	);
 	write_volatile(
 		idt_ptr.offset(0x12),
@@ -148,7 +148,10 @@ unsafe fn set_idt() {
 		idt_ptr.offset(0x14),
 		IdtEntry::new(virtualization_exception as usize, 0x08, 0x8E),
 	);
-	// (*IDT)[0x15] = IdtEntry::new(control_protection_exception as usize, 0x08, 0x8E); // (only available with CET)
+	// write_volatile(
+	// 	idt_ptr.offset(0x15),
+	// 	IdtEntry::new(control_protection_exception as usize, 0x08, 0x8E), // (only available with CET)
+	// );
 	// 0x16 ~ 0x1F : Reserved
 	write_volatile(
 		idt_ptr.offset(0x20),
