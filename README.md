@@ -3,7 +3,12 @@
 Yugeon CHUN ([42intra](https://profile.intra.42.fr/users/ychun)) \
 Chaehun SONG ([42intra](https://profile.intra.42.fr/users/schaehun)) \
 KFS-1 done (2024/09/09), KFS-2 done (2024/09/19) \
-KFS-3 (2024/10/24), KFS-4 ing...
+KFS-3 done (2024/10/24), KFS-4 done (2024/11/22)
+## Feature
+- Base on qemu emulator, arch-i386 x86 system.
+- A very simple shell with some command.
+- GDT, IDT implemented.
+- Heap allocation system implemented.
 ## Requirement
 cpu 가상화 기능 체크
 ```sh
