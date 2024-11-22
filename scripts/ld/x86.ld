@@ -32,5 +32,6 @@ SECTIONS {
         *(.stack)
     } : data
 
+    stack_top = .;
     kernel_end = .;
 }

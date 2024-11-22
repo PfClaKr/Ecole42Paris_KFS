@@ -9,3 +9,9 @@ pub unsafe fn inb(port: u16) -> u8 {
 	asm!("in al, dx", out("al") value, in("dx") port);
 	value
 }
+
+pub fn hlt() {
+	unsafe {
+		asm!("hlt", options(nomem, nostack, preserves_flags));
+	}
+}

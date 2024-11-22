@@ -40,8 +40,8 @@ impl Gdt {
 		Gdt {
 			null_segment: GdtEntry::new(0, 0, 0, 0),
 			kernel_code_segment: GdtEntry::new(0x0, 0xFFFFF, 0x9A, 0xC),
-			kernel_data_segment: GdtEntry::new(0x0, 0xFFFFF, 0x92, 0xC),
-			kernel_stack_segment: GdtEntry::new(0x0, 0xFFFFF, 0x92, 0xC),
+			kernel_data_segment: GdtEntry::new(0x0, 0xFFFFF, 0x93, 0xC),
+			kernel_stack_segment: GdtEntry::new(0x0, 0xFFFFF, 0x93, 0xC),
 			user_code_segment: GdtEntry::new(0x0, 0xFFFFF, 0xFA, 0xC),
 			user_data_segment: GdtEntry::new(0x0, 0xFFFFF, 0xF2, 0xC),
 			user_stack_segment: GdtEntry::new(0x0, 0xFFFFF, 0xF2, 0xC),
@@ -84,5 +84,16 @@ pub fn load() {
 			out("ax") _,
 			options(att_syntax)
 		);
+
+		// {
+		// 	let mut gdtr = GdtDescriptor {
+		// 		limit: 0,
+		// 		base: 0,
+		// 	};
+		// 	asm!("sgdt [{}]", in(reg) &mut gdtr as *mut GdtDescriptor);
+		// 	let limit = gdtr.limit;
+		// 	let base = gdtr.base;
+		// 	crate::println!("GDT: limit: {} base: 0x{:08x}", limit, base);
+		// }
 	}
 }

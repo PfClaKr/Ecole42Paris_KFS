@@ -1,6 +1,9 @@
 pub mod asm_utile;
 pub mod gdt;
+pub mod idt;
+pub mod interrupts;
 pub mod multiboot;
 pub mod panic;
+pub mod pic;
 pub mod string;
 pub mod symbols;

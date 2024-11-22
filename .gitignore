@@ -1,6 +1,7 @@
 /target
 /debug
 /iso
+log.txt
 kfs.iso
 .vscode
 *.lock
