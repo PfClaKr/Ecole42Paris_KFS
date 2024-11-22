@@ -52,7 +52,7 @@ pub struct MultibootMemoryMapEntry {
 
 #[link_section = ".stack"]
 #[no_mangle]
-static mut STACK: [u8; 4096] = [0; 4096];
+static mut STACK: [u8; 8192] = [0; 8192];
 
 #[naked]
 #[no_mangle]
@@ -60,7 +60,7 @@ pub extern "C" fn start() -> ! {
 	unsafe {
 		naked_asm!(
 			// "mov esp, {stack_end}",
-			"lea esp, [STACK + 4096]",
+			"lea esp, [STACK + 8192]",
 			"xor ebp, ebp",
 
 			"push eax",
@@ -68,7 +68,7 @@ pub extern "C" fn start() -> ! {
 			"push edx",
 
 			"push ebx", // Physical address multiboot2 info
-			"push eax", // magic value multiboo2 bootloader, 0x36d76289
+			"push eax", // magic value multiboot2 bootloader, 0x36d76289
 			"call {kernel_main}",
 			"call {panic}",
 			"pop eax",

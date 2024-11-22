@@ -1,6 +1,5 @@
 use crate::io::shell::SHELL;
 
-// List of interrupts - informative purpose
 #[repr(usize)]
 #[derive(Debug, PartialEq)]
 #[allow(unused)]
@@ -39,33 +38,6 @@ use crate::include::asm_utile::{hlt, outb};
 
 use super::pic::{ChainedPics, PIC_1_OFFSET, PIC_2_OFFSET};
 
-// #[macro_export]
-// macro_rules! handler {
-// 	($isr: ident) => {{
-// 		#[naked]
-// 		extern "C" fn wrapper() {
-// 			unsafe {
-// 				naked_asm!(
-// 					// "cli",
-// 					"push ebp",
-// 					"mov ebp, esp",
-// 					"pushad",
-// 					"mov eax, esp",
-// 					"push eax",
-// 					"call {}",
-// 					"pop eax",
-// 					"popad",
-// 					"pop ebp",
-// 					// "sti",
-// 					"iretd",
-// 					sym $isr,
-// 				);
-// 			}
-// 		}
-// 		wrapper as extern "C" fn()
-// 	}};
-// }
-
 macro_rules! create_isr {
 	($handler_name: ident, $int_index: expr) => {
 		pub extern "C" fn $handler_name(frame: IntStackFrame) {
@@ -73,7 +45,7 @@ macro_rules! create_isr {
 			crate::println!("{:#x?}", frame);
 
 			if ($int_index != InterruptIndex::Breakpoint) {
-				loop {}
+				hlt()
 			}
 		}
 	};
@@ -82,9 +54,41 @@ macro_rules! create_isr {
 			crate::println!("\x1b[4;mIDT: {:?}\x1b[15;m", $int_index);
 			crate::println!("\x1b[4;merror_code: {}\x1b[15;m", error_code);
 			crate::println!("{:#x?", frame);
-			loop {}
+			hlt()
 		}
 	}
+}
+
+macro_rules! create_isr_iretd {
+    ($name:ident, $handler_fn:expr) => {
+        #[no_mangle]
+        pub extern "C" fn $name(_: IntStackFrame) {
+            unsafe {
+                core::arch::asm!(
+                    "push eax",
+                    "push ebx",
+                    "push ecx",
+                    "push edx",
+                    "push esi",
+                    "push edi",
+                    "push ebp",
+
+                    "call {handler}",
+
+                    "pop ebp",
+                    "pop edi",
+                    "pop esi",
+                    "pop edx",
+                    "pop ecx",
+                    "pop ebx",
+                    "pop eax",
+                    "iretd",
+                    handler = sym $handler_fn,
+                    options(noreturn),
+                );
+            }
+        }
+    };
 }
 
 #[derive(Debug)]
@@ -143,57 +147,24 @@ const PIT_FREQUENCY: u32 = 1193182; // Base PIT frequency in Hz.
 #[allow(unused)]
 const DESIRED_FREQUENCY: u32 = 100; // Desired timer interrupt frequency in Hz.
 
-static mut TICKS: usize = 0;
+pub static mut TICKS: usize = 0;
 
-/// Write to the PIT control and data ports to set the frequency.
 pub unsafe fn configure_pit(frequency: u32) {
 	let divisor = PIT_FREQUENCY / frequency;
 
-	// Send command byte to PIT control port (0x43).
 	outb(0x43, 0x36);
-	// Send low byte of divisor to channel 0 data port (0x40).
 	outb(0x40, (divisor & 0xFF) as u8);
-	// Send high byte of divisor to channel 0 data port (0x40).
 	outb(0x40, (divisor >> 8) as u8);
 }
+
+create_isr_iretd!(timer_interrupt, timer_interrupt_handler);
+create_isr_iretd!(keyboard_interrupt, keyboard_interrupt_handler);
 
 fn timer_interrupt_handler() {
 	unsafe {
 		TICKS += 1;
-
-		// if TICKS % DESIRED_FREQUENCY as usize == 0 {
-		// 	crate::println!("System is up for {} seconds", TICKS / 100);
-		// }
 		PIC.lock()
 			.notify_end_of_interrupt(InterruptIndex::Timer as u8);
-	}
-}
-
-#[no_mangle]
-pub extern "C" fn timer_interrupt(_: IntStackFrame) {
-	unsafe {
-		core::arch::asm!(
-			"push eax",
-			"push ebx",
-			"push ecx",
-			"push edx",
-			"push esi",
-			"push edi",
-			"push ebp",
-
-			"call {handler}",
-
-			"pop ebp",
-			"pop edi",
-			"pop esi",
-			"pop edx",
-			"pop ecx",
-			"pop ebx",
-			"pop eax",
-			"iretd",
-			handler = sym timer_interrupt_handler,
-			options(noreturn),
-		);
 	}
 }
 
@@ -205,34 +176,6 @@ fn keyboard_interrupt_handler() {
 		SHELL.lock().read_input(INPUT, LEN);
 		PIC.lock()
 			.notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
-	}
-}
-
-#[no_mangle]
-pub extern "C" fn keyboard_interrupt(_: IntStackFrame) {
-	unsafe {
-		core::arch::asm!(
-			"push eax",
-			"push ebx",
-			"push ecx",
-			"push edx",
-			"push esi",
-			"push edi",
-			"push ebp",
-
-			"call {handler}",
-
-			"pop ebp",
-			"pop edi",
-			"pop esi",
-			"pop edx",
-			"pop ecx",
-			"pop ebx",
-			"pop eax",
-			"iretd",
-			handler = sym keyboard_interrupt_handler,
-			options(noreturn),
-		);
 	}
 }
 
