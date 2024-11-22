@@ -18,7 +18,7 @@ pub enum Keymap {
 	FR,
 }
 
-pub fn read() -> Option<char> {
+pub fn read(processing: bool) -> Option<char> {
 	let scancode: u8;
 	let key: Option<char>;
 	let mut shift: spin::MutexGuard<'_, bool> = SHIFT_PRESSED.lock();
@@ -50,10 +50,10 @@ pub fn read() -> Option<char> {
 			return Some('\x7f');
 		}
 		0x3B | 0x3C => {
-			if scancode == 0x3B {
+			if scancode == 0x3B && !processing {
 				vga_buffer::switch(1);
 				return Some('\x01');
-			} else {
+			} else if scancode == 0x3C && !processing {
 				vga_buffer::switch(2);
 				return Some('\x02');
 			}
@@ -194,15 +194,15 @@ static TO_ASCII_FR: [Option<char>; 256] = {
 	let mut table = [None; 256];
 
 	table[0x02] = Some('&');
-	table[0x03] = Some('é');
+	table[0x03] = Some('e');
 	table[0x04] = Some('"');
 	table[0x05] = Some('\'');
 	table[0x06] = Some('(');
 	table[0x07] = Some('-');
-	table[0x08] = Some('è');
+	table[0x08] = Some('e');
 	table[0x09] = Some('_');
-	table[0x0A] = Some('ç');
-	table[0x0B] = Some('à');
+	table[0x0A] = Some('c');
+	table[0x0B] = Some('a');
 
 	table[0x10] = Some('a');
 	table[0x11] = Some('z');

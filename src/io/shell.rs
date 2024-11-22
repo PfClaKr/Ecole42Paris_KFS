@@ -43,6 +43,7 @@ impl Shell {
 			Ok("keymap") => self.keymap(),
 			Ok("help") => self.help(),
 			Ok("uptime") => self.uptime(),
+			Ok("panic") => self.panic(),
 			Ok(command) if command.starts_with("interrupt ") => self.interrupt(command),
 			Ok(command) => print!("Command not found: {}\n", command),
 			Err(_) => print!("Command not UTF-8 input\n"),
@@ -70,6 +71,10 @@ User experience :
 		)
 	}
 
+	fn panic(&self) {
+		assert_eq!(42, -42, "It's not same between 42 and -42 !");
+	}
+
 	fn uptime(&self) {
 		println!(
 			"KFS os running while {} seconds.",
@@ -85,7 +90,7 @@ User experience :
 		);
 		println!("If you want to change, press 'y' or 'n' for abort.");
 		loop {
-			let input = keyboard::read();
+			let input = keyboard::read(true);
 			match input {
 				Some('y') => {
 					if keymap == 0 {
@@ -131,7 +136,7 @@ User experience :
 				if line_count == 24 {
 					print!("Press Enter to continue or press x to quit ...");
 					loop {
-						let input = keyboard::read();
+						let input = keyboard::read(true);
 						match input {
 							Some('\n') => break,
 							Some('x') => {
@@ -149,9 +154,12 @@ User experience :
 	}
 
 	fn halt(&self) {
+		use crate::include::panic;
 		use core::arch::asm;
 
-		println!("System is halting...");
+		println!("System is halting ...");
+		println!("Clear register ...");
+		panic::clean_regs();
 		loop {
 			unsafe {
 				asm!("hlt");
@@ -201,7 +209,7 @@ User experience :
 		println!("Stack size: {} kb", stack_size / 1024);
 		println!("For hexdump, press 'y' or 'n' for abort.");
 		loop {
-			let input = keyboard::read();
+			let input = keyboard::read(true);
 			match input {
 				Some('y') => {
 					let (start, size) = if stack_pointer > base_pointer {
@@ -227,10 +235,9 @@ User experience :
 	}
 
 	pub fn read_input(&mut self, input: &mut [u8; INPUT_SIZE], len: &mut usize) {
-		if let Some(c) = keyboard::read() {
+		if let Some(c) = keyboard::read(false) {
 			match c {
 				'\n' => {
-					// let input = self.input;
 					print!("\n");
 					self.execute_command(&input[..*len]);
 					*len = 0;

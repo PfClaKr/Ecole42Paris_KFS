@@ -15,7 +15,7 @@ pub fn print(address: *const u8, size: i32) {
 		if line_count == 24 {
 			print!("Press Enter to continue or press x to quit ...");
 			loop {
-				let input = keyboard::read();
+				let input = keyboard::read(true);
 				match input {
 					Some('\n') => break,
 					Some('x') => {
