@@ -49,7 +49,7 @@ The project is divided into four progressive stages:
 - Enhance terminal management
 - Extend the shell with more commands
 
-![image](https://github.com/user-attachments/assets/d9edcfb1-6da7-4991-8ebe-c9ca34bc3602) \
+![image](https://github.com/user-attachments/assets/d9edcfb1-6da7-4991-8ebe-c9ca34bc3602)
 
 ## Requirements
 Check CPU virtualization compatibility
